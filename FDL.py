@@ -5,23 +5,6 @@ import matplotlib.pyplot as plt
 import math
 from simplefiltutils import bp_narrow_coefs
 
-def peaking_coefs(f_c, bw, gain, f_s):
-    c = 1.0/(np.tan(np.pi*f_c/f_s))
-    cs = c**2
-    csp1 = cs+1.0
-    Bc = bw*c
-    gBc = gain*Bc
-    norm = 1.0/(csp1 + Bc)
-    b = np.zeros(3,dtype=np.float32)
-    a = np.ones_like(b)
-    b[0] = (csp1 + gBc)*norm
-    b[1] = 2.0*(1.0 - cs)*norm
-    b[2] = (csp1 - gBc)*norm
-    a[0] = 1.0
-    a[1] = b[1]
-    a[2] = (csp1 - Bc)*norm
-    return b, a
-
 
 def FDL(in_sig, f_c, bw_gt, gain, f_s):
     dt = 1.0/f_s
@@ -31,14 +14,12 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     bw = bw_gt/4.0      #bw_gt is for whole channel -- gammatone ultimately, here butterworth
     f_l = f_c - bw
     f_u = f_c + bw
-    # b_l, a_l = peaking_coefs(f_l, bw, gain, f_s)
-    # b_c, a_c = peaking_coefs(f_c, bw, gain, f_s)
-    # b_u, a_u = peaking_coefs(f_u, bw, gain, f_s)
     b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
     b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
     b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
 
-    b_lpf, a_lpf = dsp.butter(2, (80.0*2)/f_s)
+    lp_cutoff = f_c/12.0
+    b_lpf, a_lpf = dsp.butter(2, (lp_cutoff*2)/f_s)
     
     # Calculate parameters for control loop
     tau_g = (dsp.group_delay( (b_c, a_c), np.pi*(f_c*2/f_s) )[1] 
@@ -46,31 +27,6 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     print("Group delay (samples): ", tau_g)
     tau_g = tau_g*dt    # and now in time
     print("Group delay (seconds): ", tau_g)
-    ## Old coeficient calculations
-    # tau_s = 50.0/f_c    # settling time
-    # _, H_u = dsp.freqz(b_u, a_u)   # transfer function squared for upper filter
-    # _, H_l = dsp.freqz(b_l, a_l)   # transfer function squared for lower filter
-    # H_us = np.real(H_u*np.conj(H_u))
-    # H_ls = np.real(H_l*np.conj(H_l))
-    # S = (H_us - H_ls)/(H_us + H_ls) # transfer function of frequency discriminator
-    # dS = np.gradient(S)     # derivative of S, needs to be evaluated at f_c
-    # f_step = (f_s/2.0)/len(dS)
-    # idx = math.floor(f_c/f_step)
-    # w = (f_c/f_step) - idx
-    # k_s = (1.0-w)*dS[idx] + w*dS[idx+1]     # frequency discriminator constant
-    # k_i = 10.95 * tau_g / (k_s*(tau_s**2))  # PID integration term coefficient -- paper implementation
-    # gamma = tau_g/2
-    # beta = 8.11*(gamma/tau_s) + 21.9*((gamma/tau_s)**2)
-    # print(beta)
-    # k_p = (1/k_s)*(beta-1)/(beta+1)
-    # k_i = (1.0/k_s)*(21.9*(gamma/(tau_s**2)))*(2.0/(beta+1))
-    # print("k_p: ", k_p, " k_i: ", k_i)
-    # cntl_coef_01 = (k_p + k_i*dt)
-    # cntl_coef_02 = -k_p
-    # # k_i = 0
-    # k_p = 0.01 
-    ## New coefficient calculations -- can be sped up by not calculating entire transfer functions
-
     tau_s = 50.0/f_c    # settling time
     print("Settling time: ", tau_s)
     num_points = 2**15
@@ -101,8 +57,6 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     k_p = (1/k_s)*(beta-1)/(beta+1)
     k_i = (1.0/k_s)*(21.9*(gamma/(tau_s**2)))*(2.0/(beta+1))
     print("k_p: ", k_p, " k_i: ", k_i)
-    # cntl_coef_01 = (k_p + k_i*dt)
-    # cntl_coef_02 = -k_p
     
     # Allocate memory and circular buffer indices
     in_sig = np.concatenate((np.zeros(2), in_sig))
@@ -149,33 +103,20 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
         # calculate the error, control equations, frequency update
         err[k] = np.log(env_u[idx0]) - np.log(env_l[idx0])
         err_integral += err[k]*dt
-        u[k] = u[k-1] + k_p*((1.0 + dt*k_i/k_p)*err[k] - err[k-1])
-        # u[k] = u[k-1] + dt*k_i*err[k]
-        #f_c += k_p*err[k] + k_i*err_integral
-        # a = (k_p + k_i*dt*0.5)
-        # b = (-k_p + k_i*dt*0.5)
-        # c = 0
-        # u[k] = u[k-1] + a*err[k] + b*err[k-1] + c*err[k-2]
-        # f_c += 0.00001*u[k]
-        # f_c += 0.04*err[k] + 0.01*err_integral
-        # u[k] = u[k-1] + 0.1*dt*k_i*err[k]
-        # u[k] = u[k-1] + cntl_coef_01*err[k] - cntl_coef_02*err[k-1]
-        # f_c = f_c + 0.1*(cntl_coef_02*err[k] - cntl_coef_02*err[k-1])
-        # f_c += u[k]
-        # f_c += err[k]*0.005
+        # u[k] = u[k-1] + k_p*((1.0 + dt*k_i/k_p)*err[k] - err[k-1])
+        u[k] = u[k-1] + k_p*err[k] + dt*k_i*err[k] - k_p*err[k-1]
+
         f_c = f_c_base + u[k]
         f_l = f_c - bw
         f_u = f_c + bw
         f_record[k] = f_c
 
         # update coefficients
-        # b_l, a_l = peaking_coefs(f_l, bw, gain, f_s)
-        # b_c, a_c = peaking_coefs(f_c, bw, gain, f_s)
-        # b_u, a_u = peaking_coefs(f_u, bw, gain, f_s)
         b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
         b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
         b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
 
+    # plot the history the FDL states -- only for debugging
     fig = plt.figure()
     times = np.arange(0,(len(in_sig)-2))*dt
     ax1 = fig.add_subplot(2,3,1)
