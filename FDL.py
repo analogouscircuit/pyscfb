@@ -1,109 +1,124 @@
 import numpy as np
-import scipy.signal as dsp
 import scipy.fftpack as fft
+import scipy.signal as dsp
 import matplotlib.pyplot as plt
+import math
+from simplefiltutils import bp_narrow_coefs
 
-def cos_cos_test(f_3db, f_trans, f_c, f_s, sig):
-    '''
-    b and a are the filter coefficient for the prototype filter.  f_c
-    is the vco freqency (modulator of incoming signal, center frequency
-    of the filtering structure); f_trans is the 
-    frequency by which the outside filters are translated relative to
-    the center frequency. f_s is the sampling frequency, sig the signal.
-    '''
-    times = np.arange(0,len(sig)/f_s, 1.0/f_s)
-    vco_sin = np.sin(2*np.pi*f_c*times)
-    vco_cos = np.cos(2*np.pi*f_c*times)
-    sig_mod_sin = vco_sin * sig
-    sig_mod_cos = vco_cos * sig
-    b, a = cos_mod_filt_coefs(f_3db, f_trans, f_s)
-    sig1 = filter_simp(b, a, sig_mod_cos) * vco_cos
-    sig2 = filter_simp(b, a, sig_mod_sin) * vco_sin
-    return sig1 + sig2
-        
-
-def filter_simp(b, a, sig):
-    '''
-    Straightfoward (i.e. naive) implementation of a causal filter with
-    coefficients given in the standard form. Automatically sets initial
-    conditions to 0.
-    '''
-    pad_len = max(len(b), len(a)) - 1
-    sig = np.concatenate((np.zeros(pad_len, dtype=np.float32), sig))
-    y   = np.zeros_like(sig)
-    print(sig.shape)
-    for k in range(pad_len, len(sig)):
-        for j in range(len(b)):
-            y[k] += b[j]*sig[k-j]
-        for j in range(1,len(a)):
-            y[k] -= a[j]*y[k-j]
-    return y[pad_len:]
-        
-
-def cos_mod_filt_coefs(f_3db, f_mod, fs):
-    '''
-    Generates the coefficients for the cosine-modulated version of the prototype
-    impulse response (h1 in the paper).
-    '''
-    b_1p, a_1p = calc_one_pole_coefs(f_3db, fs)
-    b = np.zeros(3, dtype=np.float32)
+def peaking_coefs(f_c, bw, gain, f_s):
+    c = 1.0/(np.tan(np.pi*f_c/f_s))
+    cs = c**2
+    csp1 = cs+1.0
+    Bc = bw*c
+    gBc = gain*Bc
+    norm = 1.0/(csp1 + Bc)
+    b = np.zeros(3,dtype=np.float32)
     a = np.ones_like(b)
-    b[0] = b_1p[0]
-    b[1] = b_1p[0] * a_1p[1] * np.cos(2*np.pi*f_mod)
-    a[1] = -2*a_1p[1]*np.cos(2*np.pi*f_mod)
-    a[2] = a_1p[1]**2
-    return b, a
-
-def sin_mod_filt_coefs(f_3db, f_mod, fs):
-    '''
-    '''
-    b_1p, a_1p = calc_one_pole_coefs(f_3db, fs)
-    b = np.zeros(3, dtype=np.float32)
-    a = np.ones_like(b)
-    b[0] = 0
-    b[1] = b_1p[0] * a_1p[1] * np.sin(2*np.pi*f_mod)
-    a[1] = -2*a_1p[1]*np.cos(2*np.pi*f_mod)
-    a[2] = a_1p[1]**2
+    b[0] = (csp1 + gBc)*norm
+    b[1] = 2.0*(1.0 - cs)*norm
+    b[2] = (csp1 - gBc)*norm
+    a[0] = 1.0
+    a[1] = b[1]
+    a[2] = (csp1 - Bc)*norm
     return b, a
 
 
-def calc_one_pole_coefs(f_3db, fs, gain=1.0):
-   '''
-   Calculates the coefficients for a simple one-pole LP-filter given the cutoff
-   frequency (-3dB) and sample frequency.  Unity gain at DC is default.
+def FDL(in_sig, f_c, bw_gt, gain, f_s):
+    dt = 1.0/f_s
 
-   This is the "prototype" filter used for the FDL.  It corresponds to the
-   continuous time impulse response of h(t) = exp(-alpha*abs(t)) (except
-   causal).
-   '''
-   a = np.ones(2, dtype=np.float32)
-   b = np.zeros_like(a)
-   c = 8-2*np.cos(2*np.pi*f_3db/fs)
-   a[1] = -(c - np.sqrt(c**2 - 36.0))/6.0
-   b[0] = gain*np.sqrt(1.0 + 2.0*a[1] + a[1]**2)
-   return b, a
+    # set up filter parameters and coefficients
+    bw = bw_gt/4.0      #bw_gt is for whole channel -- gammatone ultimately, here butterworth
+    f_l = f_c - bw
+    f_u = f_c + bw
+    # b_l, a_l = peaking_coefs(f_l, bw, gain, f_s)
+    # b_c, a_c = peaking_coefs(f_c, bw, gain, f_s)
+    # b_u, a_u = peaking_coefs(f_u, bw, gain, f_s)
+    b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
+    b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
+    b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
 
-def main():
-   f_s = 44100
-   T = 1./f_s
-   dur = 1.0
-   times = np.arange(0,dur,T)
-   imp = np.zeros_like(times)
-   imp[0] = 1.0
-   # b, a = calc_one_pole_coefs(5000.0, f_s)
-   b, a = sin_mod_filt_coefs(200.0, 50.0, f_s)
-   print("b:", b)
-   print("a:", a)
-   ir = filter_simp(b, a, imp)
-   ir_spec = np.abs(fft.fft(ir))
-   fig = plt.figure()
-   ax1 = fig.add_subplot(2,1,1)
-   ax2 = fig.add_subplot(2,1,2)
-   ax1.plot(times, ir)
-   ax2.plot(times, ir_spec)
-   plt.show()
-   
+    b_lpf, a_lpf = dsp.butter(2, (20.0*2)/f_s)
+    
+    # Calculate parameters for control loop
+    tau_g = (dsp.group_delay( (b_c, a_c), [f_c*2/f_s] )[1] 
+                + dsp.group_delay( (b_lpf, a_lpf), [f_c*2/f_s] )[1]) # group delay in samples
+    tau_g = tau_g*dt    # and now in time
+    tau_s = 50.0/f_c    # settling time
+    _, H_u = dsp.freqz(b_u, a_u)   # transfer function squared for upper filter
+    _, H_l = dsp.freqz(b_l, a_l)   # transfer function squared for lower filter
+    H_us = np.real(H_u*np.conj(H_u))
+    H_ls = np.real(H_l*np.conj(H_l))
+    S = (H_us - H_ls)/(H_us + H_ls) # transfer function of frequency discriminator
+    dS = np.gradient(S)     # derivative of S, needs to be evaluated at f_c
+    f_step = (f_s/2.0)/len(dS)
+    idx = math.floor(f_c/f_step)
+    w = (f_c/f_step) - idx
+    k_s = (1.0-w)*dS[idx] + w*dS[idx+1]     # frequency discriminator constant
+    # k_i = 10.95 * tau_g / (k_s*(tau_s**2))  # PID integration term coefficient
+    k_i = 0
+    
+    # Allocate memory and circular buffer indices
+    in_sig = np.concatenate((np.zeros(2), in_sig))
+    f_record = np.zeros_like(in_sig)
+    err = np.zeros_like(in_sig)
+    u   = np.zeros_like(in_sig)
+    out_l = np.zeros(3, dtype=np.float32)
+    out_c = np.zeros_like(in_sig)
+    out_u = np.zeros(3, dtype=np.float32)
+    env_l = np.zeros(3, dtype=np.float32)
+    env_u = np.zeros(3, dtype=np.float32)
+    idx0 = 2
+    idx1 = 1
+    idx2 = 0
+    for k in range(2, len(in_sig)):
+        idx0 = (idx0 + 1)%3
+        idx1 = (idx1 + 1)%3
+        idx2 = (idx2 + 1)%3
+        t = (k-2)*dt
+        
+        # first run through the triplet of filters
+        out_l[idx0] = b_l[0]*in_sig[k] + b_l[1]*in_sig[k-1] + b_l[2]*in_sig[k-2]\
+                        - a_l[1]*out_l[idx1] - a_l[2]*out_l[idx2]
+        out_c[k]    = b_c[0]*in_sig[k] + b_c[1]*in_sig[k-1] + b_c[2]*in_sig[k-2]\
+                        - a_c[1]*out_c[k-1] - a_c[2]*out_c[k-2]
+        out_u[idx0] = b_u[0]*in_sig[k] + b_u[1]*in_sig[k-1] + b_u[2]*in_sig[k-2]\
+                        - a_u[1]*out_u[idx1] - a_u[2]*out_u[idx2]
+
+        # now run outputs of outer filters through envelope detectors (rectify & LPF)
+        env_l[idx0] = b_lpf[0]*np.abs(out_l[idx0]) + b_lpf[1]*np.abs(out_l[idx1]) + b_lpf[2]*np.abs(out_l[idx2])\
+                        - a_lpf[1]*env_l[idx1] - a_lpf[2]*env_l[idx2]
+        env_u[idx0] = b_lpf[0]*np.abs(out_u[idx0]) + b_lpf[1]*np.abs(out_u[idx1]) + b_lpf[2]*np.abs(out_u[idx2])\
+                        - a_lpf[1]*env_u[idx1] - a_lpf[2]*env_u[idx2]
+
+        # calculate the error, control equations, frequency update
+        err[k] = np.log(env_u[idx0]) - np.log(env_l[idx0])
+        u[k] = u[k-1] + dt*k_i*err[k]
+        f_c = f_c + u[k]
+        f_l = f_c - bw
+        f_u = f_c + bw
+        f_record[k] = f_c
+
+        # update coefficients
+        b_l, a_l = peaking_coefs(f_l, bw, gain, f_s)
+        b_c, a_c = peaking_coefs(f_c, bw, gain, f_s)
+        b_u, a_u = peaking_coefs(f_u, bw, gain, f_s)
+
+    return out_c[2:], f_record[2:]
 
 ################################################################################
-if __name__=="__main__":
-    main()
+if __name__ == "__main__":
+    fs = 44100
+    dt = 1.0/fs
+    dur = 1.0
+    f_in = 910.0
+    times = np.arange(0.0, dur, dt)
+    in_sig = np.cos(2*np.pi*f_in*times)
+
+    output, f_rec = FDL(in_sig, 900.0, 50.0, 2.0, fs)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,1,1)
+    ax2 = fig.add_subplot(2,1,2)
+    ax1.plot(times,in_sig)
+    ax1.plot(times,output)
+    ax2.plot(f_rec)
+    plt.show()
