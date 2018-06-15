@@ -10,8 +10,8 @@ def bp_narrow_coefs(f_c, bw, f_s):
     conventions are different from Julius O. Smith's: a is b and b is a, and 
     the signs of the a coefficients (in JOS notation) are flipped.
     '''
-    f = (2*f_c)/f_s
-    bw = (2*bw)/f_s
+    f  = f_c/f_s
+    bw = bw/f_s
     R = 1.0 - 3*bw
     K = (1.0 - 2*R*np.cos(2*np.pi*f) + (R**2))/(2 - 2*np.cos(2*np.pi*f))
     b = np.zeros(3,dtype=np.float32)
@@ -93,16 +93,22 @@ def peaking_coefs(gain, f_c, bw, f_s):
 ################################################################################
 if __name__ == "__main__":
     b, a = bp_narrow_coefs(900.0, 100.0, 44100.0)
+    b, a = dsp.iirpeak(900.0/(44100/2), 10)
     print("Filter coefficients:\n b:", b,"a:", a)
     fig = plt.figure()
     ax1 = fig.add_subplot(2,1,1)
     ax2 = fig.add_subplot(2,1,2)
     # impulse response by hand
+    # fs = 44100
+    # imp = np.zeros(fs, dtype=np.float32)
+    # imp[0] = 1
+    # ir = filter_simp(b, a, imp)
+    # ax1.plot(np.abs(fft.fft(ir)))
     fs = 44100
-    imp = np.zeros(fs, dtype=np.float32)
-    imp[0] = 1
-    ir = filter_simp(b, a, imp)
-    ax1.plot(np.abs(fft.fft(ir)))
+    t = np.arange(0,0.5,1/fs)
+    in_sig = np.cos(2*np.pi*900.0*t)
+    out_sig = filter_simp(b, a, in_sig)
+    ax1.plot(t, out_sig)
     # freqz analysis
     num_pts = 2048
     df = (fs/2)/num_pts
