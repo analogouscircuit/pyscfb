@@ -5,9 +5,15 @@ import matplotlib.pyplot as plt
 import math
 from simplefiltutils import bp_narrow_coefs
 
-'''
-This is a test for bitbucket
-'''
+
+def filt_chunk(in_chunk, out_chunk, b, a):
+    '''
+    Calculates one sample (to render main loop below more readable)
+    Ultimately in-lined all this -- slated for removal
+    '''
+    b_len = len(b)
+    a_len = len(a)
+    return np.sum(in_chunk[-b_len:]*np.flip(b,0)) - np.sum(out_chunk[-a_len:-1]*np.flip(a[1:],0))
 
 def FDL(in_sig, f_c, bw_gt, gain, f_s):
     dt = 1.0/f_s
@@ -20,9 +26,17 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
     b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
     b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
-
-    lp_cutoff = f_c/12.0
-    b_lpf, a_lpf = dsp.butter(2, (lp_cutoff*2)/f_s)
+    # b_l, a_l = dsp.bessel(2, np.array([f_l-(bw/2), f_l+(bw/2)])*(2/f_s), btype="bandpass")
+    # b_c, a_c = dsp.bessel(2, np.array([f_c-(bw/2), f_c+(bw/2)])*(2/f_s), btype="bandpass")
+    # b_u, a_u = dsp.bessel(2, np.array([f_u-(bw/2), f_u+(bw/2)])*(2/f_s), btype="bandpass")
+    b_len = len(b_c)
+    a_len = len(a_c)
+    print(a_len, b_len)
+    buf_size = max(a_len, b_len)
+    
+    lp_cutoff = f_c/8.0
+    # b_lpf, a_lpf = dsp.butter(2, (lp_cutoff*2)/f_s)
+    b_lpf, a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
     
     # Calculate parameters for control loop
     tau_g = (dsp.group_delay( (b_c, a_c), np.pi*(f_c*2/f_s) )[1] 
@@ -30,7 +44,7 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     print("Group delay (samples): ", tau_g)
     tau_g = tau_g*dt    # and now in time
     print("Group delay (seconds): ", tau_g)
-    tau_s = 50.0/f_c    # settling time
+    tau_s = 15.0/f_c    # settling time
     print("Settling time: ", tau_s)
     num_points = 2**15
     freqs = np.arange(0, (f_s/2), (f_s/2)/num_points)
@@ -62,15 +76,15 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     print("k_p: ", k_p, " k_i: ", k_i)
     
     # Allocate memory and circular buffer indices
-    in_sig = np.concatenate((np.zeros(2), in_sig))
+    in_sig = np.concatenate((np.zeros(buf_size -1), in_sig))
     f_record = np.zeros_like(in_sig)
     err = np.zeros_like(in_sig)
     u   = np.zeros_like(in_sig)
-    out_l = np.zeros(3, dtype=np.float32)
+    out_l = np.zeros(buf_size, dtype=np.float32)
     out_c = np.zeros_like(in_sig)
-    out_u = np.zeros(3, dtype=np.float32)
-    env_l = np.zeros(3, dtype=np.float32)
-    env_u = np.zeros(3, dtype=np.float32)
+    out_u = np.zeros(buf_size, dtype=np.float32)
+    env_l = np.zeros(buf_size, dtype=np.float32)
+    env_u = np.zeros(buf_size, dtype=np.float32)
     env_l_log = np.zeros_like(in_sig)
     env_u_log = np.zeros_like(in_sig)
     out_l_log = np.zeros_like(in_sig)
@@ -79,19 +93,29 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
     idx1 = 1
     idx2 = 0
     err_integral = 0.0
-    for k in range(2, len(in_sig)):
-        idx0 = (idx0 + 1)%3
-        idx1 = (idx1 + 1)%3
-        idx2 = (idx2 + 1)%3
-        t = (k-2)*dt
+    for k in range(buf_size-1, len(in_sig)):
+        idx0 = (idx0 + 1)%buf_size
+        idx1 = (idx1 + 1)%buf_size
+        idx2 = (idx2 + 1)%buf_size
+        t = (k-buf_size+1)*dt
         
         # first run through the triplet of filters
-        out_l[idx0] = b_l[0]*in_sig[k] + b_l[1]*in_sig[k-1] + b_l[2]*in_sig[k-2]\
-                        - a_l[1]*out_l[idx1] - a_l[2]*out_l[idx2]
-        out_c[k]    = b_c[0]*in_sig[k] + b_c[1]*in_sig[k-1] + b_c[2]*in_sig[k-2]\
-                        - a_c[1]*out_c[k-1] - a_c[2]*out_c[k-2]
-        out_u[idx0] = b_u[0]*in_sig[k] + b_u[1]*in_sig[k-1] + b_u[2]*in_sig[k-2]\
-                        - a_u[1]*out_u[idx1] - a_u[2]*out_u[idx2]
+        # out_l[idx0] = b_l[0]*in_sig[k] + b_l[1]*in_sig[k-1] + b_l[2]*in_sig[k-2]\
+        #                 - a_l[1]*out_l[idx1] - a_l[2]*out_l[idx2]
+        # out_c[k]    = b_c[0]*in_sig[k] + b_c[1]*in_sig[k-1] + b_c[2]*in_sig[k-2]\
+        #                 - a_c[1]*out_c[k-1] - a_c[2]*out_c[k-2]
+        # out_u[idx0] = b_u[0]*in_sig[k] + b_u[1]*in_sig[k-1] + b_u[2]*in_sig[k-2]\
+        #                 - a_u[1]*out_u[idx1] - a_u[2]*out_u[idx2]
+        
+        # out_l[idx0] = filt_chunk(in_sig[k-b_len+1:k+1], np.roll(out_l,-shift-1), b_l, a_l)
+        # out_c[k]    = filt_chunk(in_sig[k-b_len+1:k+1], out_c[k-b_len+2:k+1], b_c, a_c)
+        # out_u[idx0] = filt_chunk(in_sig[k-b_len+1:k+1], np.roll(out_u,-shift-1), b_u, a_u)
+
+        # np.sum(in_chunk[-b_len:]*np.flip(b,0)) - np.sum(out_chunk[-a_len:-1]*np.flip(a[1:],0))
+        out_l[idx0] = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_l,0)) - np.sum(np.roll(out_l,-idx0-1)[:-1]*np.flip(a_l[1:],0))
+        out_c[k]    = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_c,0)) - np.sum(out_c[k-a_len+2:k+1]*np.flip(a_c[1:],0))
+        out_u[idx0] = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_u,0)) - np.sum(np.roll(out_u,-idx0-1)[:-1]*np.flip(a_u[1:],0))
+
         out_l_log[k] = out_l[idx0]
         out_u_log[k] = out_u[idx0]
 
@@ -118,6 +142,10 @@ def FDL(in_sig, f_c, bw_gt, gain, f_s):
         b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
         b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
         b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
+        # b_l, a_l = dsp.bessel(2, np.array([f_l-(bw/2), f_l+(bw/2)])*(2/f_s), btype="bandpass")
+        # b_c, a_c = dsp.bessel(2, np.array([f_c-(bw/2), f_c+(bw/2)])*(2/f_s), btype="bandpass")
+        # b_u, a_u = dsp.bessel(2, np.array([f_u-(bw/2), f_u+(bw/2)])*(2/f_s), btype="bandpass")
+
 
     # plot the history the FDL states -- only for debugging
     fig = plt.figure()
@@ -147,11 +175,11 @@ if __name__ == "__main__":
     fs = 44100
     dt = 1.0/fs
     dur = 0.5
-    f_in = 950.0
+    f_in = 2500.0
     times = np.arange(0.0, dur, dt)
     in_sig = np.cos(2*np.pi*f_in*times)
 
-    output, f_rec = FDL(in_sig, 901.0, 200.0, 2.0, fs)
+    output, f_rec = FDL(in_sig, 2410.0, 1000.0, 2.0, fs)
     # fig = plt.figure()
     # ax1 = fig.add_subplot(2,1,1)
     # ax2 = fig.add_subplot(2,1,2)
