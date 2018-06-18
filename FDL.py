@@ -69,13 +69,10 @@ def FDL(in_sig, f_c, bw_gt, f_s):
     k_p = (1/k_s)*(beta-1)/(beta+1)
     k_i = (1.0/k_s)*(21.9*(gamma/(tau_s**2)))*(2.0/(beta+1))
 
-    # now calculate compensatory factor for asymmetry of filters
+    # now calculate compensatory factor for asymmetry of filters -- only works perfectly at center frequency, but still an improvement
     r_l = (1.0-w)*np.sqrt(H_ls[idx]) + w*np.sqrt(H_ls[idx+1])
     r_u = (1.0-w)*np.sqrt(H_us[idx]) + w*np.sqrt(H_us[idx+1])
     scale_fac = r_l/r_u
-    print(r_l)
-    print(r_u)
-    print(scale_fac)
     
     # Allocate memory and circular buffer indices
     in_sig = np.concatenate((np.zeros(buf_size -1), in_sig))
@@ -159,7 +156,7 @@ if __name__ == "__main__":
     f_s = 44100
     dt = 1.0/f_s
     dur = 0.5
-    f_in = 250.0
+    f_in = 1250.0
     times = np.arange(0.0, dur, dt)
     in_sig = np.cos(2*np.pi*f_in*times)
 
