@@ -6,17 +6,6 @@ import math
 from simplefiltutils import bp_narrow_coefs
 
 
-def filt_chunk(in_chunk, out_chunk, b, a):
-    '''
-    Calculates one sample (to render main loop below more readable)
-    Ultimately in-lined all this -- slated for removal
-    '''
-    b_len = len(b)
-    a_len = len(a)
-    return np.sum(in_chunk[-b_len:]*np.flip(b,0)) - np.sum(out_chunk[-a_len:-1]*np.flip(a[1:],0))
-
-
-
 def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
     dt = 1.0/f_s
     f_c_base = f_c
@@ -97,19 +86,22 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
     
     for k in range(buf_size-1, len(in_sig)):
         # The main loop
-
         idx0 = (idx0 + 1)%buf_size
         idx1 = (idx1 + 1)%buf_size
         idx2 = (idx2 + 1)%buf_size
         
-        # This is actually not a very smart way to do this -- np.roll doesn't work in place, but allocates a new array.
+        # This is actually not a very smart way to do this.  np.roll() doesn't work in place, but allocates a new array.
         # This does allow one to use higher-order filters, if desired, but since that approach was scrapped, probably
-        # best to go back to writing out each multiply and add explicitly. This should be benchmarked and test precisely.
-        out_l[idx0] = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_l,0)) - np.sum(np.roll(out_l,-idx0-1)[:-1]*np.flip(a_l[1:],0))
-        out_c[k]    = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_c,0)) - np.sum(out_c[k-a_len+1:k]*np.flip(a_c[1:],0))
-        out_u[idx0] = np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_u,0)) - np.sum(np.roll(out_u,-idx0-1)[:-1]*np.flip(a_u[1:],0))
+        # best to go back to writing out each multiply and add
+        # explicitly. This should be benchmarked and tested precisely.
+        out_l[idx0] = (np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_l,0)) -
+                        np.sum(np.roll(out_l,-idx0-1)[:-1]*np.flip(a_l[1:],0)))
+        out_c[k]    = (np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_c,0)) -
+                        np.sum(out_c[k-a_len+1:k]*np.flip(a_c[1:],0)))
+        out_u[idx0] = (np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_u,0)) -
+                        np.sum(np.roll(out_u,-idx0-1)[:-1]*np.flip(a_u[1:],0)))
 
-        # now run outputs of outer filters through envelope detectors (rectify & LPF)
+        # Now run outputs of outer filters through envelope detectors (rectify & LPF)
         env_l[idx0] = b_lpf[0]*np.abs(out_l[idx0]) + b_lpf[1]*np.abs(out_l[idx1]) + b_lpf[2]*np.abs(out_l[idx2])\
                         - a_lpf[1]*env_l[idx1] - a_lpf[2]*env_l[idx2]
         env_u[idx0] = b_lpf[0]*np.abs(out_u[idx0]) + b_lpf[1]*np.abs(out_u[idx1]) + b_lpf[2]*np.abs(out_u[idx2])\
