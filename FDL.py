@@ -81,9 +81,11 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
     idx1 = 1
     idx2 = 0
     is_locked = False
-    eps = 0.01
+    eps = 0.005     # threshold for determining locked condition
+    min_e = 0.01    # minimum energy for locking condition
     on_record = []
     off_record = []
+    offset = buf_size - 1   # offset for adjusting index where necessary
 
     # Only allocate if debugging
     if debug == True:
@@ -130,20 +132,22 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
                      - a_lpf[2]*env_u[idx2])
 
         # Check if tracking/locking condition is met
-        if k > 20:  # 20 is somewhat arbitrary, just trying to avoid
+        if env_c[idx0] > min_e:  
                     # locking before filters are warmed up
             env_diff = ((env_u[idx0]*scale_fac)/env_c[idx0]) - \
                         (env_l[idx0]/env_c[idx0]) 
             if env_diff < eps: 
                 if is_locked == False:
                     is_locked = True
-                    on_record.append(k)
-                    print("locked at time %.3f!" %( (k-buf_size+1)*dt ))
+                    on_record.append(k-offset)
             else:
                 if is_locked == True:
                     is_locked = False
-                    off_record.append(k)
-                    print("unlocked at time %.3f!" %( (k-buf_size+1)*dt ))
+                    off_record.append(k-offset)
+        else:
+            if is_locked == True:
+                is_locked = False
+                off_record.append(k-offset)
 
         if debug == True:
             out_l_rec[k] = out_l[idx0]
@@ -191,7 +195,17 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
         plt.show()
 
     if in_chunks == True:
-        pass 
+        time_chunks = []
+        out_chunks = []
+        freq_chunks = []
+        if len(on_record) > len(off_record):
+            off_record.append(k-offset)
+        for n in range(len(on_record)):
+            time_chunks.append(np.arange(on_record[n],off_record[n]+1)*dt)
+            out_chunks.append(out_c[on_record[n]+offset:off_record[n]+offset+1])
+            freq_chunks.append(f_record[on_record[n]+offset:off_record[n]+offset+1])
+        return time_chunks, out_chunks, freq_chunks
+        
     else:
         return out_c[buf_size-1:], f_record[buf_size-1:]
 
@@ -208,12 +222,19 @@ if __name__ == "__main__":
     bw = f_c*(2**(1/6)) - f_c/(2**(1/6))
     print("f_c: ", f_c)
     print("bw:  ", bw)
-    output, f_rec = FDL(in_sig, f_c, bw, f_s)
+    time_chunks, out_chunks, freq_chunks = FDL(in_sig, f_c, bw, f_s, in_chunks=True)
+    print("Number of chunks: ", len(time_chunks))
     fig = plt.figure()
-    ax1 = fig.add_subplot(2,1,1)
-    ax2 = fig.add_subplot(2,1,2)
-    ax1.plot(times, in_sig)
-    ax1.plot(times, output)
-    ax2.plot(times, f_rec)
+    ax1 = fig.add_subplot(1,1,1)
+    for k in range(len(time_chunks)):
+        ax1.plot(time_chunks[k], freq_chunks[k], color='b')
     plt.show()
+    # output, f_rec = FDL(in_sig, f_c, bw, f_s)
+    # fig = plt.figure()
+    # ax1 = fig.add_subplot(2,1,1)
+    # ax2 = fig.add_subplot(2,1,2)
+    # ax1.plot(times, in_sig)
+    # ax1.plot(times, output)
+    # ax2.plot(times, f_rec)
+    # plt.show()
 
