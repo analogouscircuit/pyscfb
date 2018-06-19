@@ -6,12 +6,12 @@ import math
 from simplefiltutils import bp_narrow_coefs
 
 
-def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
+def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
     dt = 1.0/f_s
     f_c_base = f_c
 
     # set up filter parameters and coefficients
-    bw = bw_gt/2.0      # bw_gt is for whole channel -- gammatone ultimately, here butterworth
+    bw = bw_gt/2.0      # bw_gt is for whole channel -- gammatone ultimately
                         # paper gives bw_gt/4.0 for some reason, 2.0 works better
     f_l = f_c - bw
     f_u = f_c + bw
@@ -21,7 +21,7 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
     b_len = len(b_c)
     a_len = len(a_c)
     buf_size = max(a_len, b_len)    # for circular buffer allocation
-    lp_cutoff = f_c/8.0     # this is essentially a free parameter -- 8.0-12.0 is a good range
+    lp_cutoff = f_c/8.0     # 8.0-12.0 is a good range
     b_lpf, a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
     
     # Calculate parameters for control loop -- can be made much more efficient
@@ -29,15 +29,17 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
 
     # First time/delay calculations
     tau_g = (dsp.group_delay( (b_c, a_c), np.pi*(f_c*2/f_s) )[1] 
-                + dsp.group_delay( (b_lpf, a_lpf), np.pi*(f_c*2/f_s) )[1]) # group delay in samples
-    tau_g = tau_g*dt    # and now in time
-    tau_s = 15.0/f_c    # settling time -- paper gives 50.0/f_c
+                + dsp.group_delay( (b_lpf, a_lpf), np.pi*(f_c*2/f_s) )[1]) 
+    tau_g = tau_g*dt    # Convert from samples to time
+    tau_s = 15.0/f_c    # Settling time -- paper gives 50.0/f_c, but
+                        # 15.0 seems to work better with our filters
 
-    # now calculate control loop constants -- need to remove calculation of (many) unnecessary points
+    # Calculate control loop parameters
+    # Need to remove calculation of (many) unnecessary points
     num_points = 2**15
     freqs = np.arange(0, (f_s/2), (f_s/2)/num_points)
-    _, H_u = dsp.freqz(b_u, a_u, num_points)   # transfer function for upper filter
-    _, H_l = dsp.freqz(b_l, a_l, num_points)   # transfer function for lower filter
+    _, H_u = dsp.freqz(b_u, a_u, num_points)   # upper filter TF
+    _, H_l = dsp.freqz(b_l, a_l, num_points)   # lower filter TF
     H_us = np.real(H_u*np.conj(H_u))    # now squared
     H_ls = np.real(H_l*np.conj(H_l))    # now squared
     num = (H_us - H_ls)
@@ -46,19 +48,20 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
     idcs = denom != 0
     S[idcs] = num[idcs]/denom[idcs]
     f_step = (f_s/2.0)/num_points
-    dS = np.gradient(S, f_step)     # derivative of S, needs to be evaluated at f_c
+    dS = np.gradient(S, f_step)     # derivative of S, to be evaluated at f_c
     idx = math.floor(f_c/f_step)
     w = (f_c/f_step) - idx
-    k_s_grad = (1.0-w)*dS[idx] + w*dS[idx+1]     # frequency discriminator constant
+    k_s_grad = (1.0-w)*dS[idx] + w*dS[idx+1]     # freq. discriminator constant
     k_s = (S[idx] - S[idx-1])/f_step
-    # k_i = 10.95 * tau_g / (k_s*(tau_s**2))  # PID integration term coefficient -- paper implementation
+    # k_i = 10.95 * tau_g / (k_s*(tau_s**2))  # paper implementation
     gamma = tau_g/2
     beta = 8.11*(gamma/tau_s) + 21.9*((gamma/tau_s)**2)
     k_p = (1/k_s)*(beta-1)/(beta+1)
     k_i = (1.0/k_s)*(21.9*(gamma/(tau_s**2)))*(2.0/(beta+1))
 
-    # now calculate compensatory factor for asymmetry of filters
-    # only works perfectly at center frequency, but still an improvement
+    # Calculate compensatory factor for asymmetry of filters --
+    # only works perfectly at center frequency, but still an
+    # improvement.
     r_l = (1.0-w)*np.sqrt(H_ls[idx]) + w*np.sqrt(H_ls[idx+1])
     r_u = (1.0-w)*np.sqrt(H_us[idx]) + w*np.sqrt(H_us[idx+1])
     scale_fac = r_l/r_u
@@ -72,26 +75,33 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
     out_c = np.zeros_like(in_sig)
     out_u = np.zeros(buf_size, dtype=np.float32)
     env_l = np.zeros(buf_size, dtype=np.float32)
+    env_c = np.zeros(buf_size, dtype=np.float32)
     env_u = np.zeros(buf_size, dtype=np.float32)
     idx0 = 2
     idx1 = 1
     idx2 = 0
+    is_locked = False
+    eps = 0.01
+    on_record = []
+    off_record = []
 
+    # Only allocate if debugging
     if debug == True:
-        # Only allocate this memory if you want to debug.
         env_l_rec = np.zeros_like(in_sig)
         env_u_rec = np.zeros_like(in_sig)
         out_l_rec = np.zeros_like(in_sig)
         out_u_rec = np.zeros_like(in_sig)
     
+    # Begin the main loop
     for k in range(buf_size-1, len(in_sig)):
-        # The main loop
         idx0 = (idx0 + 1)%buf_size
         idx1 = (idx1 + 1)%buf_size
         idx2 = (idx2 + 1)%buf_size
         
-        # This is actually not a very smart way to do this.  np.roll() doesn't work in place, but allocates a new array.
-        # This does allow one to use higher-order filters, if desired, but since that approach was scrapped, probably
+        # This is actually not a very smart way to do this.  np.roll()
+        # doesn't work in place, but allocates a new array.
+        # This does allow one to use higher-order filters, if desired,
+        # but since that approach was scrapped, probably
         # best to go back to writing out each multiply and add
         # explicitly. This should be benchmarked and tested precisely.
         out_l[idx0] = (np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_l,0)) -
@@ -101,11 +111,39 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
         out_u[idx0] = (np.sum(in_sig[k-b_len+1:k+1]*np.flip(b_u,0)) -
                         np.sum(np.roll(out_u,-idx0-1)[:-1]*np.flip(a_u[1:],0)))
 
-        # Now run outputs of outer filters through envelope detectors (rectify & LPF)
-        env_l[idx0] = b_lpf[0]*np.abs(out_l[idx0]) + b_lpf[1]*np.abs(out_l[idx1]) + b_lpf[2]*np.abs(out_l[idx2])\
-                        - a_lpf[1]*env_l[idx1] - a_lpf[2]*env_l[idx2]
-        env_u[idx0] = b_lpf[0]*np.abs(out_u[idx0]) + b_lpf[1]*np.abs(out_u[idx1]) + b_lpf[2]*np.abs(out_u[idx2])\
-                        - a_lpf[1]*env_u[idx1] - a_lpf[2]*env_u[idx2]
+        # Now run outputs of filters through envelope detectors
+        # (i.e. rectify & LPF).
+        env_l[idx0] = (b_lpf[0]*np.abs(out_l[idx0]) 
+                     + b_lpf[1]*np.abs(out_l[idx1]) 
+                     + b_lpf[2]*np.abs(out_l[idx2])
+                     - a_lpf[1]*env_l[idx1]
+                     - a_lpf[2]*env_l[idx2])
+        env_c[idx0] = (b_lpf[0]*np.abs(out_c[k])
+                     + b_lpf[1]*np.abs(out_c[k-1])
+                     + b_lpf[2]*np.abs(out_c[k-2])
+                     - a_lpf[1]*np.abs(env_c[idx1])
+                     - a_lpf[2]*np.abs(env_c[idx2]))
+        env_u[idx0] = (b_lpf[0]*np.abs(out_u[idx0])
+                     + b_lpf[1]*np.abs(out_u[idx1])
+                     + b_lpf[2]*np.abs(out_u[idx2])
+                     - a_lpf[1]*env_u[idx1]
+                     - a_lpf[2]*env_u[idx2])
+
+        # Check if tracking/locking condition is met
+        if k > 20:  # 20 is somewhat arbitrary, just trying to avoid
+                    # locking before filters are warmed up
+            env_diff = ((env_u[idx0]*scale_fac)/env_c[idx0]) - \
+                        (env_l[idx0]/env_c[idx0]) 
+            if env_diff < eps: 
+                if is_locked == False:
+                    is_locked = True
+                    on_record.append(k)
+                    print("locked at time %.3f!" %( (k-buf_size+1)*dt ))
+            else:
+                if is_locked == True:
+                    is_locked = False
+                    off_record.append(k)
+                    print("unlocked at time %.3f!" %( (k-buf_size+1)*dt ))
 
         if debug == True:
             out_l_rec[k] = out_l[idx0]
@@ -113,8 +151,9 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
             env_l_rec[k] = env_l[idx0]
             env_u_rec[k] = env_u[idx0]
 
-        # calculate the error, control equations, frequency update
-        err[k] = np.log(scale_fac*env_u[idx0]) - np.log(env_l[idx0])    # scale factor inserted here to avoid messing with dynamics
+        # Calculate the error, control equations, frequency update
+        # scale factor inserted here to avoid messing with dynamics
+        err[k] = np.log(scale_fac*env_u[idx0]) - np.log(env_l[idx0])    
         u[k] = u[k-1] + k_p*err[k] + dt*k_i*err[k] - k_p*err[k-1]
 
         f_c = f_c_base + u[k]
@@ -122,13 +161,14 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
         f_u = f_c + bw
         f_record[k] = f_c
 
-        # update coefficients
+        # Update coefficients
         b_l, a_l = bp_narrow_coefs(f_l, bw, f_s)
         b_c, a_c = bp_narrow_coefs(f_c, bw, f_s)
         b_u, a_u = bp_narrow_coefs(f_u, bw, f_s)
 
+
     if debug == True:
-        # plot the history the FDL states 
+        # Plot the history of the FDL states 
         fig = plt.figure()
         times = np.arange(0,(len(in_sig)-2))*dt
         ax1 = fig.add_subplot(2,3,1)
@@ -150,7 +190,10 @@ def FDL(in_sig, f_c, bw_gt, f_s, debug=False):
         ax1_1.plot(times, f_record[2:])
         plt.show()
 
-    return out_c[buf_size-1:], f_record[buf_size-1:]
+    if in_chunks == True:
+        pass 
+    else:
+        return out_c[buf_size-1:], f_record[buf_size-1:]
 
 ################################################################################
 if __name__ == "__main__":
