@@ -4,7 +4,13 @@ import scipy.signal as dsp
 
 class PLL:
     '''
-    An implementation of the phase-locked loop.  The purpose of encapsulating
+    Implementation of a digital phase-locked loop (PLL) as presented in
+    Sethares' "Rhythm and Transforms" book (2007).  Uses a gradient-ascent
+    approach, correlating the input signal with an internal oscillator,
+    adjusting the phase of the internal oscillator to maximize the correlation.
+    The frequency estimate is found by calculating the gradient of the phase.
+
+    The purpose of encapsulating
     this into a class is to avoid recalculation of parameters -- i.e. it
     provides a benefit in situations in which a PLL with the same parameters is
     to be used multiple times, as is the case with an instantiation of a SCFB. 
