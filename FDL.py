@@ -82,7 +82,7 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
     idx2 = 0
     is_locked = False
     eps = 0.005     # threshold for determining locked condition
-    min_e = 0.01    # minimum energy for locking condition
+    min_e = 0.005    # minimum energy for locking condition
     on_record = []
     off_record = []
     offset = buf_size - 1   # offset for adjusting index where necessary
@@ -139,15 +139,15 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
             if env_diff < eps: 
                 if is_locked == False:
                     is_locked = True
-                    on_record.append(k-offset)
+                    on_record.append(k - offset)
             else:
                 if is_locked == True:
                     is_locked = False
-                    off_record.append(k-offset)
+                    off_record.append(k - offset)
         else:
             if is_locked == True:
                 is_locked = False
-                off_record.append(k-offset)
+                off_record.append(k - offset)
 
         if debug == True:
             out_l_rec[k] = out_l[idx0]
@@ -213,12 +213,18 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
 if __name__ == "__main__":
     f_s = 44100
     dt = 1.0/f_s
-    dur = 0.5
-    f_in = 1250.0
+    dur = 1.5
+    f_in_0 = 1250.0
+    f_in_1 = 1200.0
     times = np.arange(0.0, dur, dt)
-    in_sig = np.cos(2*np.pi*f_in*times)
-
-    f_c = f_in*0.95 
+    f = np.linspace(f_in_0, f_in_1, len(times))
+    # fig1 = plt.figure()
+    # ax = fig1.add_subplot(1,1,1)
+    # ax.plot(times, f)
+    in_sig = np.cos(2*np.pi*f*times)
+    in_sig = np.concatenate([in_sig, np.cos(2*np.pi*f_in_1*times)])
+    # f_c = f_in*0.95 
+    f_c = (f_in_0 + f_in_1)/2.
     bw = f_c*(2**(1/6)) - f_c/(2**(1/6))
     print("f_c: ", f_c)
     print("bw:  ", bw)
@@ -226,6 +232,7 @@ if __name__ == "__main__":
     print("Number of chunks: ", len(time_chunks))
     fig = plt.figure()
     ax1 = fig.add_subplot(1,1,1)
+    ax1.plot(times, f)
     for k in range(len(time_chunks)):
         ax1.plot(time_chunks[k], freq_chunks[k], color='b')
     plt.show()
