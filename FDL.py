@@ -7,6 +7,16 @@ from simplefiltutils import bp_narrow_coefs
 
 
 def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
+    '''
+    Implementation of the Frequency Discriminator Loop (FDL) as described in 
+    Kumaresan, Peddinti and Cariani (2013). This is a central component of the
+    Synchrony Capture Filter Bank (SCFB). The implementation differs from the
+    paper, which give a presentation in terms of non-causal, continuous-time
+    filters. We instead use FIR filters that have low-cost parameter
+    calculations. These FIR filters are *not* perfectly symmetrical, so a
+    somewhat ad-hoc adjustment term is added so that the triplet filter bank
+    converges more nearly to the desired frequency. 
+    '''
     dt = 1.0/f_s
     f_c_base = f_c
 
@@ -67,7 +77,7 @@ def FDL(in_sig, f_c, bw_gt, f_s, in_chunks=False, debug=False):
     scale_fac = r_l/r_u
     
     # Allocate memory and circular buffer indices
-    in_sig = np.concatenate((np.zeros(buf_size -1), in_sig))
+    in_sig = np.concatenate((np.zeros(buf_size - 1), in_sig))
     f_record = np.zeros_like(in_sig)
     err = np.zeros_like(in_sig)
     u   = np.zeros_like(in_sig)
