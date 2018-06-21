@@ -3,7 +3,6 @@ import scipy.fftpack as fft
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import math
-from simplefiltutils import bp_narrow_coefs
 
 class FDL:
     '''
@@ -34,7 +33,8 @@ class FDL:
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/8.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/12.0     # 8.0-12.0 is a good range
+        # lp_cutoff = 50.0
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         
         # Calculate parameters for control loop -- can be made much more efficient
@@ -83,8 +83,8 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 0.005     # threshold for determining locked condition
-        self.min_e = 0.005    # minimum energy for locking condition
+        self.eps = 0.01 # threshold for determining locked condition
+        self.min_e = 0.01    # minimum energy for locking condition
 
     def _reset(self):
         self.f_c = self.f_c_base
@@ -269,11 +269,12 @@ if __name__ == "__main__":
     f_s = 44100
     dt = 1.0/f_s
     dur = 0.5
-    f_in_0 = 1250.0
+    f_in_0 = 1200.0
     f_in_1 = 1200.0
     times = np.arange(0.0, dur, dt)
-    in_sig = np.cos(2*np.pi*f_in_0*times)
-    fdl = FDL(f_in_0*0.9, 400.0, f_s)
+    f = np.linspace(f_in_1, f_in_0, len(times))
+    in_sig = np.cos(2*np.pi*f*times)
+    fdl = FDL(f_in_0*0.99, 400.0, f_s)
     f0s, idcs, outs = fdl.process_data(in_sig)
     fig = plt.figure()
     ax1 = fig.add_subplot(2,1,1)
@@ -281,4 +282,5 @@ if __name__ == "__main__":
     for k in range(len(f0s)):
         ax1.plot(idcs[k], fdl.freq_chunks[k])
     ax2.plot(np.arange(0,len(in_sig)),fdl.f_record)
+    ax2.plot(np.arange(0,len(in_sig)), f)
     plt.show()
