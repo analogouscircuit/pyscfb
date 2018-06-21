@@ -1,7 +1,9 @@
 import numpy as np
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
+import scipy.io.wavfile
 from scfbutils import FDL, pll
+
 
 class SCFB:
     '''
@@ -43,30 +45,47 @@ class SCFB:
 
 
     def process_signal(self, in_sig, verbose=False):
+        '''
+        Where all the actual signal processing is done -- actually, where all
+        the signal processing functions and methods are called. Results are all
+        stored in "self.chunks," which is a collection of ti
+        '''
         self.in_sig = in_sig
         for k in range(self.num_chan):
             if verbose:
                 print("Processing channel %d/%d"%(k+1, self.num_chan))
-            filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
+            # filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
+            filted = in_sig
             f0s, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
             for j in range(len(f0s)):
+                if len(out_chunks[j]) < 50:   # ignore very short chunks 
+                    continue
                 _, freq_est = pll(out_chunks[j], f0s[j], self.f_s)
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
 
 
     def plot_output(self):
+        '''
+        Makes a simple plot of all captured frequency information
+        '''
         if self.processed == False:
             print("You haven't processed an input yet!")
             return
         fig = plt.figure()
         ax1 = fig.add_subplot(1,1,1)
         for k in range(len(self.chunks)):
-            ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1])
+            ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='k')
         plt.show()
 
 
     def get_ordered_output(self):
+        '''
+        Returns a single list with the same number of elements as there were
+        samples in the input signal.  Each element of the list is itself a
+        list, to which is appended all frequencies that are detected at that
+        time.  (The number of detected frequencies at each time is variable.)
+        '''
         if self.processed == False:
             print("You haven't processed an input yet!")
             return
@@ -81,14 +100,21 @@ class SCFB:
 
 ################################################################################
 if __name__=="__main__":
-    scfb = SCFB(1000, 1400, 3, 44100)
+    scfb = SCFB(200, 1200, 20, 44100)
     f_s = 44100
     dt = 1./f_s
-    f_0 = 1200.0
+    f_0 = 240.0
     dur = 0.5
     t = np.arange(0, dur, dt)
-    in_sig = np.cos(2.*np.pi*f_0*t)
+    for k in range(1,5):
+        in_sig = np.cos(2.*np.pi*k*f_0*t)
+    # f_s, in_sig = scipy.io.wavfile.read("/home/dahlbom/audio/audio_files/beethoven_1s.wav")
+    # in_sig = np.array(in_sig, dtype=np.float32)
+    # in_sig = in_sig/(2**15)
+    # in_sig = in_sig/np.max(in_sig)
+    # print("Max value of signal: ", np.max(in_sig))
     scfb.process_signal(in_sig, verbose=True)
     scfb.plot_output()
     ordered_out = scfb.get_ordered_output()
     print(ordered_out[:100])
+

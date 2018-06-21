@@ -84,8 +84,8 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 0.01 # threshold for determining locked condition
-        self.min_e = 0.01    # minimum energy for locking condition
+        self.eps = 0.001 # threshold for determining locked condition
+        self.min_e = 0.001    # minimum energy for locking condition
 
     def _reset(self):
         self.f_c = self.f_c_base
