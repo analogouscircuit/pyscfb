@@ -14,12 +14,13 @@ class SCFB:
     implemented in a separated class), when the FDLs report a locked
     condition.
     '''
-    def __init__(self, f_lo, f_hi, num_chan, f_s, verbose=False):
+    def __init__(self, f_lo, f_hi, num_chan, f_s):
         # basic parameters and placeholders
         self.f_s = f_s
         self.dt = 1./f_s
         self.num_chan = num_chan
         self.chunks = []
+        self.processed = False
 
         # calculate frequencies and bandwidths of channels
         self.f_c = np.logspace(np.log10(f_lo), np.log10(f_hi), num_chan)
@@ -36,29 +37,58 @@ class SCFB:
             self.a.append(a)
             self.b.append(b)
 
-        # Set up FDLs and PLLs for each channel
+        # Set up FDLs for each channel
         self.fdl = [FDL(self.f_c[k], self.bw[k], self.f_s) for k in
                         range(self.num_chan)]
-        # self.pll = [PLL(self.f_c[k], self.f_s) for k in range(self.num_chan)]
 
 
-    def process_signal(self, in_sig):
+    def process_signal(self, in_sig, verbose=False):
+        self.in_sig = in_sig
         for k in range(self.num_chan):
+            if verbose:
+                print("Processing channel %d/%d"%(k+1, self.num_chan))
             filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
             f0s, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
+            for j in range(len(f0s)):
+                _, freq_est = pll(out_chunks[j], f0s[j], self.f_s)
+                self.chunks.append( (idx_chunks[j], freq_est) )
+        self.processed = True
 
 
+    def plot_output(self):
+        if self.processed == False:
+            print("You haven't processed an input yet!")
+            return
+        fig = plt.figure()
+        ax1 = fig.add_subplot(1,1,1)
+        for k in range(len(self.chunks)):
+            ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1])
+        plt.show()
 
 
-
-    def plot_output(self, in_sig):
-        pass
-
-
-    def get_ordered_output(self, in_sig):
-        pass
+    def get_ordered_output(self):
+        if self.processed == False:
+            print("You haven't processed an input yet!")
+            return
+        self.ordered = [ [] for k in range(len(self.in_sig)) ]
+        for n in range(len(self.chunks)):
+            k = 0
+            for idx in self.chunks[n][0]:
+                self.ordered[idx].append(self.chunks[n][1][k])
+                k += 1
+        return self.ordered
 
 
 ################################################################################
 if __name__=="__main__":
-    scfb = SCFB(80, 4000, 50, 44100, verbose=True)
+    scfb = SCFB(1000, 1400, 3, 44100)
+    f_s = 44100
+    dt = 1./f_s
+    f_0 = 1200.0
+    dur = 0.5
+    t = np.arange(0, dur, dt)
+    in_sig = np.cos(2.*np.pi*f_0*t)
+    scfb.process_signal(in_sig, verbose=True)
+    scfb.plot_output()
+    ordered_out = scfb.get_ordered_output()
+    print(ordered_out[:100])

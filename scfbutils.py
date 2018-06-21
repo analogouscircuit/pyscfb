@@ -193,7 +193,7 @@ class FDL:
             # Calculate the error, control equations, frequency update
             # scale factor inserted here to avoid messing with dynamics
             err[k] = np.log(self.scale_fac*env_u[idx0]) - np.log(env_l[idx0])    
-            u[k] = u[k-1] + self.k_p*err[k] + dt*self.k_i*err[k] - self.k_p*err[k-1]
+            u[k] = u[k-1] + self.k_p*err[k] + self.dt*self.k_i*err[k] - self.k_p*err[k-1]
 
             self.f_c = self.f_c_base + u[k]
             self.f_l = self.f_c - self.bw
