@@ -1,8 +1,10 @@
+import cpll
 import numpy as np
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
 from scfbutils import FDL, pll
+
 
 
 class SCFB:
@@ -28,12 +30,13 @@ class SCFB:
         self.f_c = np.logspace(np.log10(f_lo), np.log10(f_hi), num_chan)
         c = 2.**(1./6.) - 1/(2.**(1./6.))   # bw multiplier
         self.bw = [ max(100.0, f_c*c) for f_c in self.f_c ] 
+        print(self.f_c)
 
         # Set up filter coefficients for each channel
         self.a = []
         self.b = []
         for k in range(self.num_chan):
-            b, a = dsp.butter(2, np.array([max(self.f_c[k] - self.bw[k],
+            b, a = dsp.butter(4, np.array([max(self.f_c[k] - self.bw[k],
                 self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
                 btype='bandpass')
             self.a.append(a)
@@ -56,13 +59,16 @@ class SCFB:
                 print("Processing channel %d/%d"%(k+1, self.num_chan))
             # filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
             filted = in_sig
-            f0s, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
-            for j in range(len(f0s)):
-                if len(out_chunks[j]) < 50:   # ignore very short chunks 
+            # f0s, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
+            freq_chunks, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
+            for j in range(len(idx_chunks)):
+                if len(out_chunks[j]) < np.floor(0.01/self.dt):   # dur > 10 ms
                     continue
-                _, freq_est = pll(out_chunks[j], f0s[j], self.f_s)
+                #_, freq_est = pll(out_chunks[j], f0s[j], self.f_s)
+                freq_est = freq_chunks[j]    # debugging -- see FDL output
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
+        return self.chunks
 
 
     def plot_output(self):
@@ -74,6 +80,7 @@ class SCFB:
             return
         fig = plt.figure()
         ax1 = fig.add_subplot(1,1,1)
+        print("num chunks: ", len(self.chunks))
         for k in range(len(self.chunks)):
             ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='k')
         plt.show()
@@ -100,13 +107,13 @@ class SCFB:
 
 ################################################################################
 if __name__=="__main__":
-    scfb = SCFB(200, 1200, 20, 44100)
+    scfb = SCFB(200, 2000, 10, 44100)
     f_s = 44100
     dt = 1./f_s
-    f_0 = 240.0
+    f_0 = 220.0
     dur = 0.5
     t = np.arange(0, dur, dt)
-    for k in range(1,5):
+    for k in range(1,2):
         in_sig = np.cos(2.*np.pi*k*f_0*t)
     # f_s, in_sig = scipy.io.wavfile.read("/home/dahlbom/audio/audio_files/beethoven_1s.wav")
     # in_sig = np.array(in_sig, dtype=np.float32)
@@ -115,6 +122,6 @@ if __name__=="__main__":
     # print("Max value of signal: ", np.max(in_sig))
     scfb.process_signal(in_sig, verbose=True)
     scfb.plot_output()
-    ordered_out = scfb.get_ordered_output()
-    print(ordered_out[:100])
+    # ordered_out = scfb.get_ordered_output()
+    # print(ordered_out[:100])
 

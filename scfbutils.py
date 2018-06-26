@@ -28,13 +28,15 @@ class FDL:
                             # paper gives bw_gt/4.0 for some reason, 2.0 works better
         self.f_l = f_c - self.bw
         self.f_u = f_c + self.bw
+        self.f_min = self.f_l    # lower bound on center freq adaptation
+        self.f_max = self.f_u    # upper bound on center freq adaptiation
         self.b_l, self.a_l = self.bp_narrow_coefs(self.f_l, self.bw, f_s)
         self.b_c, self.a_c = self.bp_narrow_coefs(self.f_c, self.bw, f_s)
         self.b_u, self.a_u = self.bp_narrow_coefs(self.f_u, self.bw, f_s)
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/12.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/8.0     # 8.0-12.0 is a good range
         # lp_cutoff = 50.0
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         
@@ -73,7 +75,8 @@ class FDL:
         self.k_s = (S[idx] - S[idx-1])/f_step # primiate gradient calc
                                               # other version commented out
                                               # above
-        self.k_p = (1/self.k_s)*(beta-1)/(beta+1)
+        # self.k_p = (1/self.k_s)*(beta-1)/(beta+1)
+        self.k_p = 0.45*(1/self.k_s)*(beta-1)/(beta+1)
         self.k_i = (1.0/self.k_s)*(21.9*(gamma/(tau_s**2)))*(2.0/(beta+1))
 
         # Calculate compensatory factor for asymmetry of filters --
@@ -84,10 +87,13 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 0.001 # threshold for determining locked condition
-        self.min_e = 0.001    # minimum energy for locking condition
+        self.eps = 0.002 # threshold for determining locked condition
+        self.min_e = 0.15    # minimum energy for locking condition
 
     def _reset(self):
+        '''
+        Reset the FDL back to the center frequency
+        '''
         self.f_c = self.f_c_base
         self.f_l = self.f_c - self.bw
         self.f_u = self.f_c + self.bw
@@ -109,7 +115,7 @@ class FDL:
         err = np.zeros_like(in_sig)
         u   = np.zeros_like(in_sig)
         out_l = np.zeros(self.buf_size, dtype=np.float32)
-        out_c = np.zeros_like(in_sig)
+        out_c = np.zeros_like(in_sig, dtype=np.float32)
         out_u = np.zeros(self.buf_size, dtype=np.float32)
         env_l = np.zeros(self.buf_size, dtype=np.float32)
         env_c = np.zeros(self.buf_size, dtype=np.float32)
@@ -168,7 +174,6 @@ class FDL:
 
             # Check if tracking/locking condition is met
             if env_c[idx0] > self.min_e:  
-                        # locking before filters are warmed up
                 env_diff = ((env_u[idx0]*self.scale_fac)/env_c[idx0]) - \
                             (env_l[idx0]/env_c[idx0]) 
                 if env_diff < self.eps: 
@@ -195,7 +200,9 @@ class FDL:
             err[k] = np.log(self.scale_fac*env_u[idx0]) - np.log(env_l[idx0])    
             u[k] = u[k-1] + self.k_p*err[k] + self.dt*self.k_i*err[k] - self.k_p*err[k-1]
 
-            self.f_c = self.f_c_base + u[k]
+            # note that we clip to the original bandwidth -- may need to consider
+            # doing something to u as well...
+            self.f_c = np.clip(self.f_c_base + u[k], self.f_min, self.f_max)
             self.f_l = self.f_c - self.bw
             self.f_u = self.f_c + self.bw
             f_record[k] = self.f_c
@@ -241,6 +248,7 @@ class FDL:
         self.f_record = f_record[offset:]
         self._reset()    
         return [f[0] for f in self.freq_chunks], self.idx_chunks, self.out_chunks            
+        # return self.freq_chunks, self.idx_chunks, self.out_chunks            
             
 
     @staticmethod
