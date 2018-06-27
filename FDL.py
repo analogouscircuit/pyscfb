@@ -4,6 +4,10 @@ import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import math
 import pdb
+import time
+import pyximport
+pyximport.install()
+import scfbutils_c as scfb
 
 class FDL:
     '''
@@ -96,6 +100,26 @@ class FDL:
         self.b_u, self.a_u = self.bp_narrow_coefs(self.f_u, self.bw, self.f_s)
 
     def process_data(self, in_sig):
+        '''
+        Version of below in Cython (about 150 times faster)
+        '''
+        out, self.f_record, on, off, num_on = scfb.process_data(
+                          in_sig, self.f_c, self.bw, self.f_s, self.b_lpf,
+                          self.a_lpf, self.scale_fac, self.min_e, self.eps,
+                          self.k_i, self.k_p)
+        self.out = out
+        self.idx_chunks = []
+        self.out_chunks = []
+        self.freq_chunks = []
+        for k in range(num_on):
+            if off[k] == 0:
+                off[k] = len(in_sig)-1
+            self.idx_chunks.append(np.arange(on[k], off[k]+1))
+            self.out_chunks.append(out[on[k]:off[k]+1])
+            self.freq_chunks.append(self.f_record[on[k]:off[k]+1])
+        return [f[0] for f in self.freq_chunks], self.idx_chunks, self.out_chunks, num_on
+
+    def process_data_py(self, in_sig):
         '''
         Function that actually performs the adaptive filtering. Generates an
         list of 3-element tuples (f0, times, output). All of these are needed
@@ -240,6 +264,7 @@ class FDL:
             self.freq_chunks.append(f_record[on_record[n]+offset:off_record[n]+offset+1])
         self.f_record = f_record[offset:]
         self._reset()    
+        self.out = out_c
         return [f[0] for f in self.freq_chunks], self.idx_chunks, self.out_chunks            
             
 
@@ -315,7 +340,23 @@ if __name__ == "__main__":
     f = np.linspace(f_in_1, f_in_0, len(times))
     in_sig = np.cos(2*np.pi*f*times)
     fdl = FDL(f_in_0*0.99, 250.0, f_s)
-    f0s, idcs, outs = fdl.process_data(in_sig)
+    num_its = 1 
+
+    start = time.time()
+    for k in range(num_its):
+        f0s, idcs, outs = fdl.process_data_py(in_sig)
+    end = time.time()
+    print("Python implementation: %.4f (s) per call" % ( (end-start)/num_its ) )
+    plt.plot(fdl.out)
+
+    start = time.time()
+    for k in range(num_its):
+        f0s, idcs, outs = fdl.process_data(in_sig)
+    end = time.time()
+    print("Cython implementation: %.4f (s) per call" % ( (end-start)/num_its ) )
+    plt.plot(fdl.out)
+    # plt.show()
+
     fig = plt.figure()
     ax1 = fig.add_subplot(2,1,1)
     ax2 = fig.add_subplot(2,1,2)

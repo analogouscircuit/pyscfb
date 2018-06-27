@@ -1,9 +1,11 @@
-import cpll
 import numpy as np
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
-from scfbutils import FDL, pll
+import pdb
+from FDL import FDL
+from scfbutils_c import pll
+
 
 
 
@@ -57,15 +59,12 @@ class SCFB:
         for k in range(self.num_chan):
             if verbose:
                 print("Processing channel %d/%d"%(k+1, self.num_chan))
-            # filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
-            filted = in_sig
-            # f0s, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
-            freq_chunks, idx_chunks, out_chunks = self.fdl[k].process_data(filted)
-            for j in range(len(idx_chunks)):
+            filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
+            f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
+            for j in range(num_chunks):
                 if len(out_chunks[j]) < np.floor(0.01/self.dt):   # dur > 10 ms
                     continue
-                #_, freq_est = pll(out_chunks[j], f0s[j], self.f_s)
-                freq_est = freq_chunks[j]    # debugging -- see FDL output
+                freq_est = pll(out_chunks[j], f0s[j], self.f_s)
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
         return self.chunks

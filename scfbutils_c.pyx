@@ -101,11 +101,11 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
             else:
                 if is_locked == 1:
                     is_locked = 0
-                    off_record[num_on] = k - offset
+                    off_record[num_on-1] = k - offset
         else:
             if is_locked == 1:
                 is_locked = 0
-                off_record[num_on] = k - offset
+                off_record[num_on-1] = k - offset
 
         # Calculate the error, control equations, frequency update
         # scale factor inserted here to avoid messing with dynamics
@@ -131,14 +131,11 @@ cdef bp_narrow_coefs(double f_c, double bw, double f_s, np.ndarray[np.float64_t]
     bw = bw/f_s
     cdef double R = 1.0 - 3*bw
     cdef double K = (1.0 - 2*R*cos(2.0*pi*f) + (R*R))/(2.0 - 2.0*cos(2.0*pi*f))
-    # cdef np.ndarray[np.float64_t] b = np.zeros(3,dtype=np.float64)
-    # cdef np.ndarray[np.float64_t] a = np.ones_like(b)
     b[0] = 1.0 - K
     b[1] = 2*(K-R)*cos(2*pi*f)
     b[2] = (R*R)-K
     a[1] = -2*R*cos(2*pi*f)
     a[2] = (R*R)
-    # return b, a
 
 
 
