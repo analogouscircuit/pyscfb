@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import math
 from simplefiltutils import bp_narrow_coefs
 
-def pll_func(in_sig, f_c, f_s):
+def pll(in_sig, f_c, f_s):
     '''
     Implementation of a digital phase-locked loop (PLL) as presented in
     Sethares' "Rhythm and Transforms" book (2007).  Uses a gradient-ascent

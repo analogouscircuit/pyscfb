@@ -158,8 +158,8 @@ class FDL:
             env_c[idx0] = (self.b_lpf[0]*np.abs(out_c[k])
                          + self.b_lpf[1]*np.abs(out_c[k-1])
                          + self.b_lpf[2]*np.abs(out_c[k-2])
-                         - self.a_lpf[1]*np.abs(env_c[idx1])
-                         - self.a_lpf[2]*np.abs(env_c[idx2]))
+                         - self.a_lpf[1]*env_c[idx1]
+                         - self.a_lpf[2]*env_c[idx2])
             env_u[idx0] = (self.b_lpf[0]*np.abs(out_u[idx0])
                          + self.b_lpf[1]*np.abs(out_u[idx1])
                          + self.b_lpf[2]*np.abs(out_u[idx2])
