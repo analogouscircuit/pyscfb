@@ -112,6 +112,9 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         err[k] = log(scale_fac*env_u[idx0]) - log(env_l[idx0])    
         u[idx0] = u[idx1] + k_p*(err[k]-err[k-1]) + dt*k_i*err[k]
         f_c = f_c_base + u[idx0]
+        # clip adaptation range
+        # f_c = min(f_c, f_c_base+bw)
+        # f_c = max(f_c, f_c_base-bw)
         f_record[k] = f_c
 
     return (out_c[offset:sig_len], f_record[offset:sig_len], on_record, off_record, num_on)
@@ -119,7 +122,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef bp_narrow_coefs(double f_c, double bw, double f_s, np.ndarray[np.float64_t] b, np.ndarray[np.float64_t] a):
+cpdef bp_narrow_coefs(double f_c, double bw, double f_s, np.ndarray[np.float64_t] b, np.ndarray[np.float64_t] a):
     '''
     From Steven W. Smith's book, The Scientist and Engineer's Guide to Digital 
     Signal Processing, eqs. 19-7 and 19-8. Note that his coefficient 

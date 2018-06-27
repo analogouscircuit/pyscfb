@@ -62,7 +62,7 @@ class SCFB:
             filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
             f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
             for j in range(num_chunks):
-                if len(out_chunks[j]) < np.floor(0.01/self.dt):   # dur > 10 ms
+                if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
                     continue
                 freq_est = pll(out_chunks[j], f0s[j], self.f_s)
                 self.chunks.append( (idx_chunks[j], freq_est) )
@@ -82,7 +82,7 @@ class SCFB:
         print("num chunks: ", len(self.chunks))
         for k in range(len(self.chunks)):
             ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='k')
-        plt.show()
+        # plt.show()
 
 
     def get_ordered_output(self):
@@ -106,14 +106,15 @@ class SCFB:
 
 ################################################################################
 if __name__=="__main__":
-    scfb = SCFB(200, 2000, 10, 44100)
+    scfb = SCFB(200, 4000, 70, 44100)
     f_s = 44100
     dt = 1./f_s
-    f_0 = 220.0
+    f_0 = 520.0
     dur = 0.5
     t = np.arange(0, dur, dt)
-    for k in range(1,2):
-        in_sig = np.cos(2.*np.pi*k*f_0*t)
+    in_sig = np.zeros_like(t)
+    for k in range(1,5):
+        in_sig += (1./k)*np.cos(2.*np.pi*k*f_0*t)
     # f_s, in_sig = scipy.io.wavfile.read("/home/dahlbom/audio/audio_files/beethoven_1s.wav")
     # in_sig = np.array(in_sig, dtype=np.float32)
     # in_sig = in_sig/(2**15)
@@ -121,6 +122,8 @@ if __name__=="__main__":
     # print("Max value of signal: ", np.max(in_sig))
     scfb.process_signal(in_sig, verbose=True)
     scfb.plot_output()
+    for fdl in scfb.fdl:
+        plt.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record)
     # ordered_out = scfb.get_ordered_output()
     # print(ordered_out[:100])
-
+    plt.show()
