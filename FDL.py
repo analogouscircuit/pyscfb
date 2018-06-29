@@ -143,6 +143,9 @@ def pll(in_sig, f_c, f_s):
     approach, correlating the input signal with an internal oscillator,
     adjusting the phase of the internal oscillator to maximize the correlation.
     The frequency estimate is found by calculating the gradient of the phase.
+
+    Note that this is slow! There is a faster (>100x) cpdef version in
+    scfbutils_c.pyx.
     '''
     mu = 0.120*(f_c/4000.)
     dt = 1./f_s
