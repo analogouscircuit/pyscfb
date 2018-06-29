@@ -20,9 +20,10 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
     # Allocate memory and circular buffer indices
     in_sig = np.concatenate((np.zeros(buf_size - 1), in_sig))
     cdef:
+        int sig_len = len(in_sig)
         double dt = 1.0/f_s
         double f_c_base = f_c
-        double env_diff, f_future
+        double env_diff
         int offset = filt_ord   # offset for adjusting index where necessary
         np.ndarray[np.float64_t] f_record = np.zeros_like(in_sig)
         np.ndarray[np.float64_t] err = np.zeros_like(in_sig)
@@ -43,7 +44,6 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         unsigned int idx1 = 1
         unsigned int idx2 = 0
         int k
-        int sig_len = len(in_sig)
         np.ndarray[np.int32_t] on_record = np.zeros(sig_len-buf_size+1, dtype=np.int32) 
         np.ndarray[np.int32_t] off_record = np.zeros(sig_len-buf_size+1, dtype=np.int32) 
         int num_on = 0
@@ -129,7 +129,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
             out_c *= 0
             out_u *= 0
             env_l *= 0
-            env_c *= 0
+            # env_c *= 0
             env_u *= 0
             u *= 0
         if f_c < f_c_base - bw:
@@ -141,7 +141,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
             out_c *= 0
             out_u *= 0
             env_l *= 0
-            env_c *= 0
+            # env_c *= 0
             env_u *= 0
             u *= 0
         
@@ -195,10 +195,6 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
     cdef np.ndarray[np.float64_t] b_lp, a_lp, b_s, a_s
     b_lp, a_lp = dsp.bessel(2, (lp_cutoff*2)/f_s)
     b_s, a_s = dsp.bessel(2, (50.0*2)/f_s)      # smoothing filter
-    # b_lp0, b_lp1, b_lp2 = b_lp[0], b_lp[1], b_lp[2]
-    # a_lp1, a_lp2 = a_lp[1], a_lp[2]
-    # b_s0, b_s1, b_s2 = b_s[0], b_s[1], b_s[2]
-    # a_s1, a_s2 = a_s[1], a_s[2]
     cdef int buf_size = max(len(b_lp), len(a_lp))
     in_sig = np.concatenate( (np.zeros(buf_size-1, dtype=np.float64), in_sig)) 
     cdef int sig_len = len(in_sig)
@@ -220,9 +216,6 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
         lp_out[idx0] = b_lp[0]*mod_sig[idx0] + b_lp[1]*mod_sig[idx1] \
                      + b_lp[2]*mod_sig[idx2] - a_lp[1]*lp_out[idx1] \
                      - a_lp[2]*lp_out[idx2]
-        # lp_out[idx0] = b_lp0*mod_sig[idx0] + b_lp1*mod_sig[idx1] \
-        #              + b_lp2*mod_sig[idx2] - a_lp1*lp_out[idx1] \
-        #              - a_lp2*lp_out[idx2]
         phi[k] = phi[k-1] - mu*lp_out[idx0]
         out[k] = cos(2*pi*f_c*t + phi[k])
     cdef np.ndarray freq_offset = np.gradient(phi[buf_size-1:sig_len], dt)/(2*pi)
@@ -230,6 +223,25 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
     # return out[buf_size-1:], (freq_offset+f_c)
     return freq_offset+f_c
 
-################################################################################
+
+cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
+    '''
+    Implementation of a simple automatic gain control (AGC) unit. The approach
+    follows the "naive" implementation given in Johnson and Sethares' book
+    Telecommunication Breakdown.  mu sets the sensitivity/noise tradeoff. ds
+    sets the desired power.
+    '''
+    cdef np.ndarray[np.float64_t] a, s
+    cdef int sig_len = len(in_sig)
+    cdef int k
+    cdef double sign
+    a = np.zeros(sig_len, dtype=np.float64)
+    a[0] = 1.0
+    s = np.zeros_like(a)
+    for k in range(1,sig_len):
+        s[k-1] = a[k-1]*in_sig[k-1]
+        sign = 1.0 if a[k-1] > 0 else 0.0
+        a[k] = a[k-1] - mu * sign * (s[k-1]*s[k-1]-ds)
+    return s
 
 
