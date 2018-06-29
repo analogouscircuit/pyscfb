@@ -6,7 +6,7 @@ import pdb
 import pyximport
 from FDL import FDL
 pyximport.install()
-from scfbutils_c import pll
+from scfbutils_c import pll, agc
 
 
 class SCFB:
@@ -41,8 +41,8 @@ class SCFB:
             # b, a = dsp.bessel(4, np.array([max(self.f_c[k] - self.bw[k],
             #     self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
             #     btype='bandpass')
-            b, a = dsp.bessel(4, np.array([max(self.f_c[k] - self.bw[k],
-                self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
+            b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
+                self.f_c[0]), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
                 btype='bandpass')
             self.a.append(a)
             self.b.append(b)
@@ -59,6 +59,8 @@ class SCFB:
         stored in "self.chunks," which is a collection of ti
         '''
         self.in_sig = in_sig
+        # fdl_out_chunks = []
+        # agc_out_chunks = []
         for k in range(self.num_chan):
             if verbose:
                 print("Processing channel %d/%d"%(k+1, self.num_chan))
@@ -67,10 +69,15 @@ class SCFB:
             for j in range(num_chunks):
                 if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
                     continue
+                # fdl_out_chunks.append(out_chunks[j])
+                out_chunks[j] = agc(out_chunks[j], 0.1, 0.25)
+                out_chunks[j] = agc(out_chunks[j], 0.001, 0.25)
+                # agc_out_chunks.append(out_chunks[j])
                 freq_est = pll(out_chunks[j], f0s[j], self.f_s)
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
-        return self.chunks
+        return self.chunks    # final goal, next one is for debuggin
+        # return fdl_out_chunks, agc_out_chunks, idx_chunks
 
 
     def plot_output(self, ax=None):
@@ -121,7 +128,8 @@ def stepped_test_sig(dur, num_seg, f0, f1, fs):
     
 
 if __name__=="__main__":
-    scfb = SCFB(200, 4000, 100, 44100)
+    # scfb = SCFB(559.56, 559.56, 1, 44100)
+    scfb = SCFB(200., 4000., 100, 44100)
     f_s = 44100
     dt = 1./f_s
     f_0 = 1800.0
@@ -154,10 +162,19 @@ if __name__=="__main__":
 
     fig1 = plt.figure()
     ax = fig1.add_subplot(1,1,1)
+    # fdl_out, agc_out, idx_chunks = scfb.process_signal(in_sig, verbose=True)
     scfb.process_signal(in_sig, verbose=True)
     for fdl in scfb.fdl:
         ax.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record, linewidth=0.75, color='k', linestyle='--')
     scfb.plot_output(ax)
+
+    # fig2 = plt.figure()
+    # ax1 = fig2.add_subplot(1,2,1)
+    # ax2 = fig2.add_subplot(1,2,2)
+    # for k in range(len(fdl_out)):
+    #     ax1.plot(fdl_out[k]+k)
+    #     ax2.plot(agc_out[k]+k)
+
     # for k in range(1,num_h+1):
     #     ax.plot(np.arange(0,len(in_sig))/f_s, k*f_vals, color='b')
     # ordered_out = scfb.get_ordered_output()

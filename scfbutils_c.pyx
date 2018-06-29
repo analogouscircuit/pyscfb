@@ -126,7 +126,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
                 off_record[num_on-1] = k - offset
             f_c = f_c_base
             out_l *= 0
-            out_c *= 0
+            # out_c *= 0
             out_u *= 0
             env_l *= 0
             # env_c *= 0
@@ -138,7 +138,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
                 off_record[num_on-1] = k - offset
             f_c = f_c_base
             out_l *= 0
-            out_c *= 0
+            # out_c *= 0
             out_u *= 0
             env_l *= 0
             # env_c *= 0
@@ -224,6 +224,8 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
     return freq_offset+f_c
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
     '''
     Implementation of a simple automatic gain control (AGC) unit. The approach
