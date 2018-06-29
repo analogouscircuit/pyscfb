@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import scipy.io.wavfile
 import pdb
 import pyximport
+import pickle
 from FDL import FDL
+from Template import Template
 pyximport.install()
 from scfbutils_c import pll, agc
 
@@ -41,8 +43,11 @@ class SCFB:
             # b, a = dsp.bessel(4, np.array([max(self.f_c[k] - self.bw[k],
             #     self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
             #     btype='bandpass')
+            # b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
+            #     self.f_c[0]), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
+            #     btype='bandpass')
             b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
-                self.f_c[0]), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
+                20.0), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
                 btype='bandpass')
             self.a.append(a)
             self.b.append(b)
@@ -112,6 +117,8 @@ class SCFB:
             for idx in self.chunks[n][0]:
                 self.ordered[idx].append(self.chunks[n][1][k])
                 k += 1
+        for k in range(len(self.ordered)):
+            self.ordered[k] = np.array(self.ordered[k], dtype=np.float64)
         return self.ordered
 
 
@@ -189,5 +196,12 @@ if __name__=="__main__":
     # ax2.set_xlabel('Time (s)')
 
     plt.show()
+
+
+    pickle.dump(scfb.get_ordered_output(), open("ordered_output.pkl", "wb"))
+
+    # temp = Template(550.0, 5)
+    # pitch, strength = temp.process_input(scfb.get_ordered_output())
+
 
 

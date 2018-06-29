@@ -2,7 +2,7 @@ import numpy as np
 import scipy.signal as dsp
 cimport numpy as np
 cimport cython
-from libc.math cimport cos, sin, fabs, log
+from libc.math cimport cos, sin, fabs, log, exp
 
 
 @cython.boundscheck(False)
@@ -98,18 +98,29 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
                     is_locked = 1
                     on_record[num_on] = k - offset
                     num_on += 1
+
             else:
                 if is_locked == 1:
                     is_locked = 0
                     off_record[num_on-1] = k - offset
-                    # TEST: reset after losing lock
-                    f_c = f_c_base
+                    ## TEST: reset after losing lock
+                    # f_c = f_c_base
+                    # out_l *= 0
+                    # out_u *= 0
+                    # env_l *= 0
+                    # env_u *= 0
+                    # u *= 0
         else:
             if is_locked == 1:
                 is_locked = 0
                 off_record[num_on-1] = k - offset
-                # TEST: reset after losing lock
-                f_c = f_c_base
+                ## TEST: reset after losing lock
+                # f_c = f_c_base
+                # out_l *= 0
+                # out_u *= 0
+                # env_l *= 0
+                # env_u *= 0
+                # u *= 0
 
         # Calculate the error, control equations, frequency update
         # scale factor inserted here to avoid messing with dynamics
@@ -120,28 +131,24 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         f_c = f_c_base + u[idx0]
         
         ## reset if outside of range
-        if f_c > f_c_base + bw:
+        if f_c > f_c_base + 0.75*bw:
             if is_locked == 1:
                 is_locked = 0
                 off_record[num_on-1] = k - offset
             f_c = f_c_base
             out_l *= 0
-            # out_c *= 0
             out_u *= 0
             env_l *= 0
-            # env_c *= 0
             env_u *= 0
             u *= 0
-        if f_c < f_c_base - bw:
+        if f_c < f_c_base - 0.75*bw:
             if is_locked == 1:
                 is_locked = 0
                 off_record[num_on-1] = k - offset
             f_c = f_c_base
             out_l *= 0
-            # out_c *= 0
             out_u *= 0
             env_l *= 0
-            # env_c *= 0
             env_u *= 0
             u *= 0
         
@@ -246,4 +253,17 @@ cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double 
         a[k] = a[k-1] - mu * sign * (s[k-1]*s[k-1]-ds)
     return s
 
+cpdef tuple template_calc(np.ndarray[np.float64_t, ndim=1] freqs, double f0, int num_h, double sigma):
+    cdef double dJ = 0.0
+    cdef double temp = 0.0
+    cdef double s = 0.0
+    cdef int num_inputs = np.size(freqs)
+    cdef int n, p
+    for n in range(num_inputs):
+        for p in range(1,num_h+1):
+            temp = exp( - ((freqs[n] - p*f0)**2)/(2 * (p * sigma)**2) )
+            s += temp 
+            dJ += ((freqs[n] - p*f0)/(p * sigma**2))*temp
+    return dJ, s
+    
 
