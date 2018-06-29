@@ -3,10 +3,10 @@ import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
 import pdb
+import pyximport
 from FDL import FDL
+pyximport.install()
 from scfbutils_c import pll
-
-
 
 
 class SCFB:
@@ -38,7 +38,10 @@ class SCFB:
         self.a = []
         self.b = []
         for k in range(self.num_chan):
-            b, a = dsp.butter(4, np.array([max(self.f_c[k] - self.bw[k],
+            # b, a = dsp.bessel(4, np.array([max(self.f_c[k] - self.bw[k],
+            #     self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
+            #     btype='bandpass')
+            b, a = dsp.bessel(4, np.array([max(self.f_c[k] - self.bw[k],
                 self.f_c[0]), self.f_c[k] + self.bw[k]])*(2/f_s),
                 btype='bandpass')
             self.a.append(a)
@@ -70,18 +73,19 @@ class SCFB:
         return self.chunks
 
 
-    def plot_output(self):
+    def plot_output(self, ax=None):
         '''
         Makes a simple plot of all captured frequency information
         '''
         if self.processed == False:
             print("You haven't processed an input yet!")
             return
-        fig = plt.figure()
-        ax1 = fig.add_subplot(1,1,1)
+        if ax==None:
+            fig = plt.figure()
+            ax = fig.add_subplot(1,1,1)
         print("num chunks: ", len(self.chunks))
         for k in range(len(self.chunks)):
-            ax1.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='k')
+            ax.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='r', linewidth=0.5)
         # plt.show()
 
 
@@ -105,25 +109,68 @@ class SCFB:
 
 
 ################################################################################
+def stepped_test_sig(dur, num_seg, f0, f1, fs):
+    num_samps = dur*fs
+    seg_len = int(num_samps//num_seg)
+    sig = np.zeros(seg_len*num_seg)
+    f_step = (f1-f0)/num_seg
+    f = np.arange(f0, f1, f_step)
+    for k in range(num_seg):
+        sig[k*seg_len:(k+1)*seg_len] = np.cos(2*np.pi*f[k]*np.arange(0,seg_len)/fs)
+    return sig
+    
+
 if __name__=="__main__":
-    scfb = SCFB(200, 4000, 70, 44100)
+    scfb = SCFB(200, 4000, 100, 44100)
     f_s = 44100
     dt = 1./f_s
-    f_0 = 520.0
+    f_0 = 1800.0
+    f_1 = 1.1*f_0
+    num_h = 2
     dur = 0.5
     t = np.arange(0, dur, dt)
-    in_sig = np.zeros_like(t)
-    for k in range(1,5):
-        in_sig += (1./k)*np.cos(2.*np.pi*k*f_0*t)
+    f_vals = np.linspace(f_0, f_1, len(t))
+    in_sig1 = np.zeros_like(t)
+    in_sig2 = np.zeros_like(t)
+    for k in range(1,num_h+1):
+        in_sig1 += (1./k)*np.cos(2.*np.pi*k*f_0*t)
+        in_sig2 += (1./k)*np.cos(2.*np.pi*k*f_1*t)
+    in_sig = in_sig1
+    # in_sig = np.concatenate((in_sig1, in_sig2))
+
+    ## use a stepped sequence
+    in_sig = stepped_test_sig(1.0, 5, 500, 1000, f_s)
+    
+    ## read a signal from a file
     # f_s, in_sig = scipy.io.wavfile.read("/home/dahlbom/audio/audio_files/beethoven_1s.wav")
     # in_sig = np.array(in_sig, dtype=np.float32)
     # in_sig = in_sig/(2**15)
     # in_sig = in_sig/np.max(in_sig)
     # print("Max value of signal: ", np.max(in_sig))
+
+    ## add noise to the signal
+    noise = np.random.normal(0.0, 0.0001, size=len(in_sig))
+    in_sig += noise
+
+    fig1 = plt.figure()
+    ax = fig1.add_subplot(1,1,1)
     scfb.process_signal(in_sig, verbose=True)
-    scfb.plot_output()
     for fdl in scfb.fdl:
-        plt.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record)
+        ax.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record, linewidth=0.75, color='k', linestyle='--')
+    scfb.plot_output(ax)
+    # for k in range(1,num_h+1):
+    #     ax.plot(np.arange(0,len(in_sig))/f_s, k*f_vals, color='b')
     # ordered_out = scfb.get_ordered_output()
     # print(ordered_out[:100])
+
+    ## spectrogram
+    # fig2 = plt.figure()
+    # ax2 = fig2.add_subplot(1,1,1)
+    # f, t, specgram = dsp.spectrogram(in_sig, f_s, nperseg=1024)
+    # ax2.pcolormesh(t, f, specgram)
+    # ax2.set_ylabel('Frequency (Hz)')
+    # ax2.set_xlabel('Time (s)')
+
     plt.show()
+
+

@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.fftpack as fft
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import math
@@ -38,8 +37,9 @@ class FDL:
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/12.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/15.0     # 8.0-12.0 is a good range
         # lp_cutoff = 50.0
+        # self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         
         # Calculate parameters for control loop -- can be made much more efficient
@@ -88,8 +88,8 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 0.05 # threshold for determining locked condition
-        self.min_e = 0.001    # minimum energy for locking condition
+        self.eps = 0.00000000000000000001 # threshold for determining locked condition
+        self.min_e = 0.01    # minimum energy for locking condition
 
     def process_data(self, in_sig):
         '''

@@ -14,8 +14,6 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
     Function that actually performs the adaptive filtering. Generates a
     list of 3-element tuples (f0, times, output). All of these are needed
     to initiate the PLL stage.
-
-    TODO: convert u (control signal) to a circular buffer.
     '''
     cdef int filt_ord = 2
     cdef int buf_size = filt_ord + 1
@@ -24,6 +22,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
     cdef:
         double dt = 1.0/f_s
         double f_c_base = f_c
+        double env_diff, f_future
         int offset = filt_ord   # offset for adjusting index where necessary
         np.ndarray[np.float64_t] f_record = np.zeros_like(in_sig)
         np.ndarray[np.float64_t] err = np.zeros_like(in_sig)
@@ -90,10 +89,11 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
 
         # Check if tracking/locking condition is met
         if env_c[idx0] > min_e:  
-                    # locking before filters are warmed up
-            env_diff = ((env_u[idx0]*scale_fac)/env_c[idx0]) - \
-                        (env_l[idx0]/env_c[idx0]) 
+            # env_diff = ((env_u[idx0]*scale_fac)/env_c[idx0]) - \
+            #             (env_l[idx0]/env_c[idx0]) 
+            env_diff = log(env_u[idx0]) - log(env_l[idx0])
             if env_diff < eps: 
+            # if env_diff == 0.0:
                 if is_locked == 0:
                     is_locked = 1
                     on_record[num_on] = k - offset
@@ -102,19 +102,49 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
                 if is_locked == 1:
                     is_locked = 0
                     off_record[num_on-1] = k - offset
+                    # TEST: reset after losing lock
+                    f_c = f_c_base
         else:
             if is_locked == 1:
                 is_locked = 0
                 off_record[num_on-1] = k - offset
+                # TEST: reset after losing lock
+                f_c = f_c_base
 
         # Calculate the error, control equations, frequency update
         # scale factor inserted here to avoid messing with dynamics
         err[k] = log(scale_fac*env_u[idx0]) - log(env_l[idx0])    
         u[idx0] = u[idx1] + k_p*(err[k]-err[k-1]) + dt*k_i*err[k]
+        
+        ## original (basic) version -- unlimited range
         f_c = f_c_base + u[idx0]
-        # clip adaptation range
-        # f_c = min(f_c, f_c_base+bw)
-        # f_c = max(f_c, f_c_base-bw)
+        
+        ## reset if outside of range
+        if f_c > f_c_base + bw:
+            if is_locked == 1:
+                is_locked = 0
+                off_record[num_on-1] = k - offset
+            f_c = f_c_base
+            out_l *= 0
+            out_c *= 0
+            out_u *= 0
+            env_l *= 0
+            env_c *= 0
+            env_u *= 0
+            u *= 0
+        if f_c < f_c_base - bw:
+            if is_locked == 1:
+                is_locked = 0
+                off_record[num_on-1] = k - offset
+            f_c = f_c_base
+            out_l *= 0
+            out_c *= 0
+            out_u *= 0
+            env_l *= 0
+            env_c *= 0
+            env_u *= 0
+            u *= 0
+        
         f_record[k] = f_c
 
     return (out_c[offset:sig_len], f_record[offset:sig_len], on_record, off_record, num_on)
@@ -122,12 +152,15 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef bp_narrow_coefs(double f_c, double bw, double f_s, np.ndarray[np.float64_t] b, np.ndarray[np.float64_t] a):
+cpdef bp_narrow_coefs(double f_c, double bw, double f_s, 
+                             np.ndarray[np.float64_t] b, 
+                             np.ndarray[np.float64_t] a):
     '''
     From Steven W. Smith's book, The Scientist and Engineer's Guide to Digital 
     Signal Processing, eqs. 19-7 and 19-8. Note that his coefficient 
     conventions are different from Julius O. Smith's: a is b and b is a, and 
-    the signs of the a coefficients (in JOS notation) are flipped.
+    the signs of the a coefficients (in JOS notation) are flipped. JOS notation
+    is used here.
     '''
     cdef double pi = np.pi
     cdef double f  = f_c/f_s
