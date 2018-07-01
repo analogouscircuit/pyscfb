@@ -7,7 +7,7 @@ import pyximport
 import pickle
 from FDL import FDL
 from Template import Template
-pyximport.install()
+pyximport.install(setup_args={"include_dirs":np.get_include()})
 from scfbutils_c import pll, agc
 
 

@@ -5,7 +5,7 @@ import math
 import pdb
 import time
 import pyximport
-pyximport.install()
+pyximport.install(setup_args={"include_dirs":np.get_include()})
 import scfbutils_c as scfb
 
 class FDL:
