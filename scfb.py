@@ -1,13 +1,118 @@
+import math
 import numpy as np
 import scipy.signal as dsp
-import matplotlib.pyplot as plt
-import math
 import pdb
-import time
-# import pyximport
-# pyximport.install(setup_args={"include_dirs":np.get_include()})
-import scfbutils
+import scfbutils    # this is the Cython module
 
+
+################################################################################
+class SCFB:
+    '''
+    Implementation of Kumaresan, Peddinti and Cariani's (2013)
+    Synchrony-Capture Filter Bank (SCFB). Consists of an array of 1/3rd-octave
+    width bandpass filters (just Butterworth for now -- later we may get more
+    sophisticated) simulating the Basilar Membrane.  Each channel is fed into a
+    Frequency Discriminator Loop (FDL), implemented in a separated class.  The
+    output of the FDLs are fed into phase-locked loops (PLLs -- also
+    implemented in a separated class), when the FDLs report a locked
+    condition.
+    '''
+    def __init__(self, f_lo, f_hi, num_chan, f_s):
+        # basic parameters and placeholders
+        self.f_s = f_s
+        self.dt = 1./f_s
+        self.num_chan = num_chan
+        self.chunks = []
+        self.processed = False
+
+        # calculate frequencies and bandwidths of channels
+        self.f_c = np.logspace(np.log10(f_lo), np.log10(f_hi), num_chan)
+        c = 2.**(1./6.) - 1/(2.**(1./6.))   # bw multiplier
+        self.bw = [ max(100.0, f_c*c) for f_c in self.f_c ] 
+        print(self.f_c)
+
+        # Set up filter coefficients for each channel
+        self.a = []
+        self.b = []
+        for k in range(self.num_chan):
+            b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
+                15.0), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
+                btype='bandpass')
+            self.a.append(a)
+            self.b.append(b)
+
+        # Set up FDLs for each channel
+        self.fdl = [FDL(self.f_c[k], self.bw[k], self.f_s) for k in
+                        range(self.num_chan)]
+
+
+    def process_signal(self, in_sig, verbose=False):
+        '''
+        Where all the actual signal processing is done -- actually, where all
+        the signal processing functions and methods are called. Results are all
+        stored in "self.chunks," which is a collection of ti
+        '''
+        self.in_sig = in_sig
+        # fdl_out_chunks = []
+        # agc_out_chunks = []
+        for k in range(self.num_chan):
+            if verbose:
+                print("Processing channel %d/%d"%(k+1, self.num_chan))
+            filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
+            f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
+            for j in range(num_chunks):
+                if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
+                    continue
+                # fdl_out_chunks.append(out_chunks[j])
+                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
+                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
+                # agc_out_chunks.append(out_chunks[j])
+                freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
+                self.chunks.append( (idx_chunks[j], freq_est) )
+        self.processed = True
+        return self.chunks    # final goal, next one is for debugging
+        # return fdl_out_chunks, agc_out_chunks, idx_chunks
+
+
+    def plot_output(self, ax=None):
+        '''
+        Makes a simple plot of all captured frequency information
+        '''
+        if self.processed == False:
+            print("You haven't processed an input yet!")
+            return
+        if ax==None:
+            fig = plt.figure()
+            ax = fig.add_subplot(1,1,1)
+        print("num chunks: ", len(self.chunks))
+        for k in range(len(self.chunks)):
+            ax.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='r', linewidth=0.5)
+        # plt.show()
+
+
+    def get_ordered_output(self):
+        '''
+        Returns a single list with the same number of elements as there were
+        samples in the input signal.  Each element of the list is itself a
+        list, to which is appended all frequencies that are detected at that
+        time.  (The number of detected frequencies at each time is variable.)
+        '''
+        if self.processed == False:
+            print("You haven't processed an input yet!")
+            return
+        self.ordered = [ [] for k in range(len(self.in_sig)) ]
+        for n in range(len(self.chunks)):
+            k = 0
+            for idx in self.chunks[n][0]:
+                self.ordered[idx].append(self.chunks[n][1][k])
+                k += 1
+        for k in range(len(self.ordered)):
+            self.ordered[k] = np.array(self.ordered[k], dtype=np.float64)
+        return self.ordered
+
+
+
+################################################################################
 class FDL:
     '''
     Implementation of the Frequency Discriminator Loop (FDL) as described in 
@@ -136,80 +241,22 @@ class FDL:
         return b, a
 
 
-
-def pll(in_sig, f_c, f_s):
-    '''
-    Implementation of a digital phase-locked loop (PLL) as presented in
-    Sethares' "Rhythm and Transforms" book (2007).  Uses a gradient-ascent
-    approach, correlating the input signal with an internal oscillator,
-    adjusting the phase of the internal oscillator to maximize the correlation.
-    The frequency estimate is found by calculating the gradient of the phase.
-
-    Note that this is slow! There is a faster (>100x) cpdef version in
-    scfbutils_c.pyx.
-    '''
-    mu = 0.120*(f_c/4000.)
-    dt = 1./f_s
-    lp_cutoff = f_c/5.0
-    b_lp, a_lp = dsp.bessel(2, (lp_cutoff*2)/f_s)
-    b_s, a_s = dsp.bessel(2, (50.0*2)/f_s)      # smoothing filter
-    buf_size = max(len(b_lp), len(a_lp))
-    in_sig = np.concatenate( (np.zeros(buf_size-1), in_sig)) 
-    phi = np.zeros_like(in_sig)
-    out = np.zeros_like(in_sig)
-    mod_sig = np.zeros(buf_size, dtype=np.float32)
-    lp_out = np.zeros(buf_size, dtype=np.float32)
-    idx0 = 2
-    idx1 = 1
-    idx2 = 0
-    for k in range(buf_size - 1, len(in_sig)):
-        t = (k - buf_size + 1)*dt
-        idx0 = (idx0 + 1)%buf_size
-        idx1 = (idx1 + 1)%buf_size
-        idx2 = (idx2 + 1)%buf_size
-        mod_sig[idx0] = in_sig[k]*np.sin(2*np.pi*f_c*t + phi[k-1]) 
-        lp_out[idx0] = b_lp[0]*mod_sig[idx0] + b_lp[1]*mod_sig[idx1] \
-                     + b_lp[2]*mod_sig[idx2] - a_lp[1]*lp_out[idx1] \
-                     - a_lp[2]*lp_out[idx2]
-        phi[k] = phi[k-1] - mu*lp_out[idx0]
-        out[k] = np.cos(2*np.pi*f_c*t + phi[k])
-    freq_offset = np.gradient(phi[buf_size-1:], dt)/(2*np.pi)
-    freq_offset = dsp.filtfilt(b_s, a_s, freq_offset)   #smooth freq estimates
-    return out[buf_size-1:], (freq_offset+f_c)
-
 ################################################################################
-if __name__ == "__main__":
-    f_s = 44100
-    dt = 1.0/f_s
-    dur = 0.5
-    f_in_0 = 1200.0
-    f_in_1 = 1200.0
-    times = np.arange(0.0, dur, dt)
-    f = np.linspace(f_in_1, f_in_0, len(times))
-    in_sig = np.cos(2*np.pi*f*times)
-    fdl = FDL(f_in_0*0.99, 250.0, f_s)
-    num_its = 1 
+class Template:
+    '''
+    '''
+    def __init__(self, f0, num_h, mu=0.1):
+        self.f0 = f0
+        self.num_h = num_h
+        self.mu = mu
+        self.sig = 50
 
-    start = time.time()
-    for k in range(num_its):
-        f0s, idcs, outs = fdl.process_data_py(in_sig)
-    end = time.time()
-    print("Python implementation: %.4f (s) per call" % ( (end-start)/num_its ) )
-    plt.plot(fdl.out)
-
-    start = time.time()
-    for k in range(num_its):
-        f0s, idcs, outs = fdl.process_data(in_sig)
-    end = time.time()
-    print("Cython implementation: %.4f (s) per call" % ( (end-start)/num_its ) )
-    plt.plot(fdl.out)
-    # plt.show()
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(2,1,1)
-    ax2 = fig.add_subplot(2,1,2)
-    for k in range(len(f0s)):
-        ax1.plot(idcs[k], fdl.freq_chunks[k])
-    ax2.plot(np.arange(0,len(in_sig)),fdl.f_record)
-    ax2.plot(np.arange(0,len(in_sig)), f)
-    plt.show()
+    def process_input(self, ordered_input):
+        sig_len = len(ordered_input)
+        phi = np.zeros(sig_len)
+        s = np.zeros_like(phi)
+        phi[0] = self.f0
+        for k in range(sig_len-1):
+            dJ, s[k] = scfbutils.template_calc(ordered_input[k], phi[k], 5, 10.0)
+            phi[k+1] = phi[k] + self.mu*dJ
+        return phi, s
