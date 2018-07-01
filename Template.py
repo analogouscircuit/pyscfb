@@ -2,9 +2,9 @@ import numpy as np
 import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import pickle
-import pyximport
-pyximport.install()
-import scfbutils_c as scfb
+# import pyximport
+# pyximport.install()
+import scfbutils as scfb
 
 
 class Template:

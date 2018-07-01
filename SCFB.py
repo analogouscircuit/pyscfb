@@ -3,12 +3,12 @@ import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
 import pdb
-import pyximport
+# import pyximport
 import pickle
 from FDL import FDL
 from Template import Template
-pyximport.install(setup_args={"include_dirs":np.get_include()})
-from scfbutils_c import pll, agc
+# pyximport.install(setup_args={"include_dirs":np.get_include()})
+from scfbutils import pll, agc
 
 
 class SCFB:
