@@ -17,7 +17,6 @@ def stepped_test_sig(dur, num_seg, f0, f1, fs):
     
 
 if __name__=="__main__":
-    # peri = SCFB(559.56, 559.56, 1, 44100)
     peri = scfb.SCFB(200., 4000., 100, 44100)
     f_s = 44100
     dt = 1./f_s

@@ -95,7 +95,7 @@ class SCFB:
         if ax==None:
             fig = plt.figure()
             ax = fig.add_subplot(1,1,1)
-        print("num chunks: ", len(self.chunks))
+        # print("num chunks: ", len(self.chunks))
         for k in range(len(self.chunks)):
             ax.plot(self.chunks[k][0]*self.dt, self.chunks[k][1], color='r', linewidth=0.5)
         # plt.show()
