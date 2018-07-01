@@ -6,7 +6,7 @@ import pdb
 import time
 # import pyximport
 # pyximport.install(setup_args={"include_dirs":np.get_include()})
-import scfbutils as scfb
+import scfbutils
 
 class FDL:
     '''
@@ -96,7 +96,7 @@ class FDL:
         '''
         Version of below in Cython (about 150 times faster)
         '''
-        out, self.f_record, on, off, num_on = scfb.process_data(
+        out, self.f_record, on, off, num_on = scfbutils.process_data(
                           in_sig, self.f_c, self.bw, self.f_s, self.b_lpf,
                           self.a_lpf, self.scale_fac, self.min_e, self.eps,
                           self.k_i, self.k_p)

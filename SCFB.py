@@ -3,12 +3,10 @@ import scipy.signal as dsp
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
 import pdb
-# import pyximport
 import pickle
 from FDL import FDL
 from Template import Template
-# pyximport.install(setup_args={"include_dirs":np.get_include()})
-from scfbutils import pll, agc
+import scfbutils 
 
 
 class SCFB:
@@ -75,10 +73,10 @@ class SCFB:
                 if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
                     continue
                 # fdl_out_chunks.append(out_chunks[j])
-                out_chunks[j] = agc(out_chunks[j], 0.1, 0.25)
-                out_chunks[j] = agc(out_chunks[j], 0.001, 0.25)
+                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
+                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
                 # agc_out_chunks.append(out_chunks[j])
-                freq_est = pll(out_chunks[j], f0s[j], self.f_s)
+                freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
         return self.chunks    # final goal, next one is for debuggin

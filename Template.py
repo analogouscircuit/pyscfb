@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pickle
 # import pyximport
 # pyximport.install()
-import scfbutils as scfb
+import scfbutils 
 
 
 class Template:
@@ -22,7 +22,7 @@ class Template:
         s = np.zeros_like(phi)
         phi[0] = self.f0
         for k in range(sig_len-1):
-            dJ, s[k] = scfb.template_calc(ordered_input[k], phi[k], 5, 10.0)
+            dJ, s[k] = scfbutils.template_calc(ordered_input[k], phi[k], 5, 10.0)
             phi[k+1] = phi[k] + self.mu*dJ
         return phi, s
 
