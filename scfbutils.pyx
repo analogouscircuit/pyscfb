@@ -37,6 +37,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         np.ndarray[np.float64_t] b_lpf, np.ndarray[np.float64_t] a_lpf, double scale_fac,
         double min_e, double eps, double k_i, double k_p):
     '''
+    Called FDL class.
     Function that actually performs the adaptive filtering. Generates a
     list of 3-element tuples (f0, times, output). All of these are needed
     to initiate the PLL stage.
@@ -211,6 +212,7 @@ cpdef bp_narrow_coefs(double f_c, double bw, double f_s,
 @cython.wraparound(False)
 cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double f_s):
     '''
+    Called by SCFB class.
     Implementation of a digital phase-locked loop (PLL) as presented in
     Sethares' "Rhythm and Transforms" book (2007).  Uses a gradient-ascent
     approach, correlating the input signal with an internal oscillator,
@@ -259,6 +261,7 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
 @cython.wraparound(False)
 cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
     '''
+    Called SCFB class.
     Implementation of a simple automatic gain control (AGC) unit. The approach
     follows the "naive" implementation given in Johnson and Sethares' book
     Telecommunication Breakdown.  mu sets the sensitivity/noise tradeoff. ds
@@ -280,14 +283,20 @@ cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef tuple template_calc(np.ndarray[np.float64_t, ndim=1] freqs, double f0, int num_h, double sigma):
+    '''
+    Called by template class (calculates the strengths and adjustments.
+    '''
     cdef double dJ = 0.0
     cdef double temp = 0.0
     cdef double s = 0.0
+    cdef double factor
     cdef int num_inputs = np.size(freqs)
     cdef int n, p
     for n in range(num_inputs):
         for p in range(1,num_h+1):
-            temp = exp( - ((freqs[n] - p*f0)**2)/(2 * (p * sigma)**2) )
+            # temp = exp( - ((freqs[n] - p*f0)**2)/(2 * (p * sigma)**2) )
+            factor = 1.0 if p==1 else 0.8
+            temp = exp( - ((freqs[n] - p*f0)**2)/(2 * (sigma)**2) )
             s += temp 
             dJ += ((freqs[n] - p*f0)/(p * sigma**2))*temp
     return dJ, s

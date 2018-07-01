@@ -26,17 +26,18 @@ if __name__=="__main__":
     dur = 0.5
     t = np.arange(0, dur, dt)
     f_vals = np.linspace(f_0, f_1, len(t))
-    in_sig1 = np.zeros_like(t)
-    in_sig2 = np.zeros_like(t)
-    for k in range(1,num_h+1):
-        in_sig1 += (1./k)*np.cos(2.*np.pi*k*f_0*t)
-        in_sig2 += (1./k)*np.cos(2.*np.pi*k*f_1*t)
-    in_sig = in_sig1
+    # in_sig1 = np.zeros_like(t)
+    # in_sig2 = np.zeros_like(t)
+    # for k in range(1,num_h+1):
+    #     in_sig1 += (1./k)*np.cos(2.*np.pi*k*f_0*t)
+    #     in_sig2 += (1./k)*np.cos(2.*np.pi*k*f_1*t)
+    # in_sig = in_sig1
     # in_sig = np.concatenate((in_sig1, in_sig2))
 
     ## use a stepped sequence
     in_sig = stepped_test_sig(1.0, 5, 500, 1000, f_s)
-    
+    for k in range(2,5):
+        in_sig += stepped_test_sig(1.0, 5, k*500.0, k*1000.0, f_s)
     ## read a signal from a file
     # f_s, in_sig = scipy.io.wavfile.read("/home/dahlbom/audio/audio_files/beethoven_1s.wav")
     # in_sig = np.array(in_sig, dtype=np.float32)

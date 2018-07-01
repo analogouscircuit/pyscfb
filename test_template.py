@@ -2,32 +2,55 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from scfb import Template
+import scfb 
+import scfbutils
 
 
 
 ################################################################################
 if __name__=="__main__":
     ordered_data = pickle.load(open("ordered_output.pkl", "rb"))
-    t = Template(510.0, 5)
-    p, s = t.process_input(ordered_data)
+    # freqs = np.logspace(np.log10(50.0), np.log10(4000.0), 100)
+    freqs = np.linspace(50.0, 4000.0, 100)
+    templates = []
+    num_harmonics = 5
+    for f in freqs:
+        t = scfb.Template(f, num_harmonics, mu=0.5, sigma=20)
+        t.process_input(ordered_data)
+        templates.append(t)
 
-    ## Simple stem plto of a time step
+    ## take a look at the templates and their spread on the frequency axis
+    # fig, ax = plt.subplots()
+    # f_axis = np.arange(20.0, 4000.0, 0.5)
+    # for t in templates:
+    #     ax.plot(f_axis, scfbutils.template_vals(f_axis, t.f0, t.sig, t.num_h),
+    #             color='k', linewidth=0.5)
+
+    
+    # t = Template(510.0, 5)
+    # p, s = t.process_input(ordered_data)
+
+    ## 
     fig, ax = plt.subplots()
-    # ln, = plt.plot([p[0],p[0]],[0, s[0]],animated=True)
-    ln, = plt.plot([p[0],p[0]],[0, s[0]])
+    ax.set_xscale('log')
+    lines = []
+    for t in templates:
+        ln, = plt.plot([t.f_vals[0], t.f_vals[0]], [0, t.strengths[0]])
+        lines.append(ln)
 
     def init():
         ax.set_xlim(20.0, 4000.0)
-        ax.set_ylim(0.0, 5.0)
-        return ln,
+        ax.set_ylim(0.0, 30.0)
+        return lines,
 
     def update(k):
-        ln.set_data([p[k], p[k]], [0, s[k]])
-        return ln,
+        for n in range(len(templates)):
+            lines[n].set_data([templates[n].f_vals[k], templates[n].f_vals[k]],
+                    [0, templates[n].strengths[k]])
+        return lines,
         
-    ani = FuncAnimation(fig, update, frames=np.arange(len(p),dtype=int),
-            init_func=init, interval=.0005, repeat=False)
+    ani = FuncAnimation(fig, update, frames=np.arange(0, len(ordered_data), 20, dtype=int),
+            init_func=init, interval=.0001, repeat=False)
 
     ## Animation
     # fig, ax = plt.subplots()

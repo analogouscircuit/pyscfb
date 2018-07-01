@@ -260,11 +260,13 @@ class FDL:
 class Template:
     '''
     '''
-    def __init__(self, f0, num_h, mu=0.1):
+    def __init__(self, f0, num_h, sigma=10.0, mu=0.1):
         self.f0 = f0
         self.num_h = num_h
         self.mu = mu
-        self.sig = 50
+        self.sig = sigma
+        self.f_vals = []
+        self.strengths = []
 
     def process_input(self, ordered_input):
         sig_len = len(ordered_input)
@@ -274,4 +276,6 @@ class Template:
         for k in range(sig_len-1):
             dJ, s[k] = scfbutils.template_calc(ordered_input[k], phi[k], 5, 10.0)
             phi[k+1] = phi[k] + self.mu*dJ
+        self.f_vals = phi
+        self.strengths = s
         return phi, s
