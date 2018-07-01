@@ -1,3 +1,14 @@
+'''
+The main Synchrony Capture Filter Bank (SCFB) module file.  This is pure python.
+All C functionality is invoked through importation of the scfbutils (Cython)
+module.  
+
+The main classes defined here are the Frequency Discriminator Loop (FDL), which
+is used in the construction of the entire SCFB class (which maintains an array
+of FDLs as well as BM filters to preceded them).  
+'''
+
+
 import math
 import numpy as np
 import scipy.signal as dsp
@@ -224,11 +235,15 @@ class FDL:
         From Steven W. Smith's book, The Scientist and Engineer's Guide to Digital 
         Signal Processing, eqs. 19-7 and 19-8. Note that his coefficient 
         conventions are different from Julius O. Smith's: a is b and b is a, and 
-        the signs of the a coefficients (in JOS notation) are flipped.
+        the signs of the a coefficients (in JOS notation) are flipped. JOS
+        notational conventions are used here.
+
+        Note that there is a Cython version of this implemented for the main
+        loop (though declared as cdef, so inaccessible here).  This is only used
+        in the initialization of an instance of the FDL class.
         '''
         f  = f_c/f_s
         bw = bw/f_s
-        #pdb.set_trace()
         R = 1.0 - 3*bw
         K = (1.0 - 2*R*np.cos(2*np.pi*f) + (R**2))/(2 - 2*np.cos(2*np.pi*f))
         b = np.zeros(3,dtype=np.float32)

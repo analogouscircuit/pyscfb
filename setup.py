@@ -1,3 +1,9 @@
+'''
+The Cython build script.  Generally don't call this directly -- use Makefile
+instead.
+'''
+
+
 from distutils.core import setup, Extension
 from Cython.Build import cythonize
 import numpy as np
