@@ -19,30 +19,22 @@ from libc.stdlib cimport malloc, free
 
 
 ################################################################################
-# Wrapped C Functions
-################################################################################
-
-def template_vals(double[:] freqs, double f0, double sigma, int num_h):
-    cdef unsigned int length = len(freqs)
-    return <double[:length]> scd.template_vals(&freqs[0], length, f0, sigma, num_h)
-
-
-
-################################################################################
-# Cython Functions
+# Extension Types
 ################################################################################
 
 cdef class TemplateData:
     '''
-    An extension type to allow multiple templates to use the same processed
-    data.
+    This class generates the linked list used by the Template class for
+    calculating the adaptation. It is necessary so that the TemplateArray class
+    can construct this linked list only once and then share it with all its
+    Template attributes.
     '''
-
-    cdef scd.f_list **f_est_list;
-    cdef scd.fs_struct fs
-    cdef int k, p
-    cdef int num_chunks
-    cdef int chunk_len, sig_len_n
+    cdef:
+        scd.f_list **f_est_list;
+        scd.fs_struct fs
+        int k, p
+        int num_chunks
+        int chunk_len, sig_len_n
 
     def __cinit__(self, chunks, sig_len):
         self.sig_len_n = sig_len
@@ -65,6 +57,16 @@ cdef class TemplateData:
         free(self.f_est_list)
 
 
+
+################################################################################
+# Wrapped C Functions
+################################################################################
+
+def template_vals(double[:] freqs, double f0, double sigma, int num_h):
+    cdef unsigned int length = len(freqs)
+    return <double[:length]> scd.template_vals_c(&freqs[0], length, f0, sigma, num_h)
+
+
 cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
         double mu):
     cdef scd.fs_struct fs
@@ -73,6 +75,11 @@ cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
     cdef double[::1] strengths = <double[:td.sig_len_n]>fs.strengths;
     return np.asarray(freqs), np.asarray(strengths)
 
+
+
+################################################################################
+# Cython Functions
+################################################################################
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

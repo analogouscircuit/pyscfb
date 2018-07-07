@@ -1,5 +1,6 @@
 /*
- *
+ * File: 	scfbutils_c.c
+ * ----------------------
  * Definitions of all pure C functions used in the SCFB implementation.  Note
  * that all these functions must be declared in both scfbutils_c.h and
  * scfbutils_d.pyd.  The wrapper is defined in the main Cython file,
@@ -7,19 +8,24 @@
  *
  */
 
+
 #include "scfbutils_c.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-double *template_vals(double *f_vals, int num_vals, double f0, double sigma, int num_h)
+
+/*
+ * Function: 	template_vals
+ * --------------------------
+ * This produces all the template values, given a set of frequencies at
+ * which to calculate. Primarily useful for visualizing the templates, but
+ * could also be used if the input is non-sparse and one wishes to do a
+ * complete inner-product calculation.
+ */
+
+double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h)
 {
-	/*
-	 * This produces all the template values, given a set of frequencies at
-	 * which to calculate. Primarily useful for visualizing the templates, but
-	 * could also be used if the input is non-sparse and one wishes to do a
-	 * complete inner-product calculation.
-	 */
 
 	double *t_vals = malloc(num_vals * sizeof(double));
 	double factor;
@@ -37,7 +43,18 @@ double *template_vals(double *f_vals, int num_vals, double f0, double sigma, int
 }
 
 
-fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, double mu, int num_h, double sigma)
+/*
+ * Function: 	template_adapt_c
+ * -----------------------------
+ *  The main signal processing for the template adaptation. Operates on a linked
+ *  list containing a variable number of frequency estimates for each moment in
+ *  time. Performs a gradient ascent calculation to determine the appropriate
+ *  adaptation behavior. Also calculates the instantaneous strength (how well
+ *  the template matches the input).
+ */
+
+fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, 
+						   double mu, int num_h, double sigma)
 {
 	int k, n, p;
 	double *f= malloc(list_len*sizeof(double)); 	// freqs
@@ -48,15 +65,6 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, double
 	for(k = 0; k < list_len-1; k++) {
 		s[k] = 0.0;
 		dJ = 0.0;
-		// while(f_estimates[k]->count>0) {
-		// 	freq = fl_pop(f_estimates[k]);
-		// 	for(p = 1; p < num_h+1; p++) {
-		// 		factor = p == 1 ? 1.0 : 0.8;
-		// 		temp = exp( - pow(freq - p*f[k],2)/(2*pow(sigma, 2)));
-		// 		s[k] += temp;
-		// 		dJ += temp*(freq - p*f[k])/(p * pow(sigma, 2));
-		// 	}
-		// }
 		for(n = 0; n < f_estimates[k]->count; n++) {
 			freq = fl_by_idx(n, f_estimates[k]);
 			for(p = 1; p < num_h+1; p++) {
@@ -72,6 +80,13 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, double
 	}
 	return fs;
 }
+
+
+
+/* 
+ * Functions for linked lists. This allows having a variable number of frequency
+ * estimates for each moment in time. These are all basic utility functions.
+ */
 
 void init_f_list(f_list *l)
 {

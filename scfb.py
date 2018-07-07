@@ -102,28 +102,6 @@ class SCFB:
         # plt.show()
 
 
-    def get_ordered_output(self):
-        '''
-        Returns a single list with the same number of elements as there were
-        samples in the input signal.  Each element of the list is itself a
-        list, to which is appended all frequencies that are detected at that
-        time.  (The number of detected frequencies at each time is variable.)
-        '''
-        if self.processed == False:
-            print("You haven't processed an input yet!")
-            return
-        self.ordered = [ [] for k in range(len(self.in_sig)) ]
-        for n in range(len(self.chunks)):
-            k = 0
-            for idx in self.chunks[n][0]:
-                self.ordered[idx].append(self.chunks[n][1][k])
-                k += 1
-        for k in range(len(self.ordered)):
-            self.ordered[k] = np.array(self.ordered[k], dtype=np.float64)
-        return self.ordered
-
-
-
 ################################################################################
 class FDL:
     '''
@@ -137,6 +115,10 @@ class FDL:
     converges more nearly to the desired frequency. 
     '''
     def __init__(self, f_c, bw_gt, f_s, debug=False):
+        '''
+        Calculate all the FDL parameters. (Actually signal processing done in
+        Cython later.)
+        '''
         self.f_s = f_s
         self.dt = 1.0/f_s
         self.f_c = f_c
@@ -269,32 +251,6 @@ class Template:
         self.f_vals = []
         self.strengths = []
 
-    def process_input(self, ordered_input):
-        '''
-        Main loop -- note that only the math is done in C. This is because of
-        the algorithm's reliance on Python's dynamic data structures. This will
-        be modified... 
-        '''
-        sig_len = len(ordered_input)
-        phi = np.zeros(sig_len)
-        s = np.zeros_like(phi)
-        phi[0] = self.f0
-        for k in range(sig_len-1):
-            dJ, s[k] = scfbutils.template_calc(ordered_input[k], phi[k], 5, 10.0)
-            phi[k+1] = phi[k] + self.mu*dJ
-        self.f_vals = phi
-        self.strengths = s
-        return phi, s
-
-    def process_chunks(self, chunks, sig_len_n):
-        '''
-        Full C implementation.
-        '''
-        phi, s = scfbutils.process_chunks(chunks, sig_len_n, self.f0, self.mu, self.num_h, self.sig)
-        self.f_vals = phi
-        self.strengths = s
-        return phi, s
-
     def adapt(self, td):
         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
                 self.mu)
@@ -302,6 +258,7 @@ class Template:
         self.strengths = s
 
 
+################################################################################
 class TemplateArray:
     def __init__(self, chunks, sig_len, f0_vals, num_h, sigma, mu):
         self.data = scfbutils.TemplateData(chunks, sig_len)
@@ -312,6 +269,6 @@ class TemplateArray:
 
     def adapt(self):
         for k, t in enumerate(self.templates):
-            # print("Adapting template {}".format(k+1))
+            print("Adapting template {}".format(k+1))
             t.adapt(self.data)
 

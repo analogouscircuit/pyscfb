@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 # import wav file
 if len(str(sys.argv))==2:
-    # print(str(sys.argv[1]))
     f_name = str(sys.argv[1])
     f_s, in_sig = scipy.io.wavfile.read(f_name)
     in_sig = np.array(in_sig, dtype=np.float32)
@@ -37,6 +36,5 @@ peri.plot_output(ax)
 plt.show()
 
 # write ordered data to file (for template processing)
-# pickle.dump(peri.get_ordered_output(), open("ordered_output.pkl", "wb"))
 pickle.dump((peri.chunks, sig_len_n), open("chunks.pkl", "wb"))
 
