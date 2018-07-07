@@ -79,6 +79,7 @@ class SCFB:
                 out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
                 # agc_out_chunks.append(out_chunks[j])
                 freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
+                assert len(freq_est)==len(idx_chunks[j])
                 self.chunks.append( (idx_chunks[j], freq_est) )
         self.processed = True
         return self.chunks    # final goal, next one is for debugging
@@ -269,6 +270,11 @@ class Template:
         self.strengths = []
 
     def process_input(self, ordered_input):
+        '''
+        Main loop -- note that only the math is done in C. This is because of
+        the algorithm's reliance on Python's dynamic data structures. This will
+        be modified... 
+        '''
         sig_len = len(ordered_input)
         phi = np.zeros(sig_len)
         s = np.zeros_like(phi)
@@ -279,3 +285,33 @@ class Template:
         self.f_vals = phi
         self.strengths = s
         return phi, s
+
+    def process_chunks(self, chunks, sig_len_n):
+        '''
+        Full C implementation.
+        '''
+        phi, s = scfbutils.process_chunks(chunks, sig_len_n, self.f0, self.mu, self.num_h, self.sig)
+        self.f_vals = phi
+        self.strengths = s
+        return phi, s
+
+    def adapt(self, td):
+        phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
+                self.mu)
+        self.f_vals = phi
+        self.strengths = s
+
+
+class TemplateArray:
+    def __init__(self, chunks, sig_len, f0_vals, num_h, sigma, mu):
+        self.data = scfbutils.TemplateData(chunks, sig_len)
+        self.templates = []
+        for f0 in f0_vals:
+            self.templates.append(Template(f0, num_h, sigma, mu))
+            print(self.templates[-1].f0)
+
+    def adapt(self):
+        for k, t in enumerate(self.templates):
+            # print("Adapting template {}".format(k+1))
+            t.adapt(self.data)
+

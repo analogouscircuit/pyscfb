@@ -26,6 +26,7 @@ else:
 # process through SCFB
 peri = scfb.SCFB(100., 4000., 100, f_s)
 peri.process_signal(in_sig, verbose=True)
+sig_len_n = len(in_sig)
 
 # plot results
 fig, ax = plt.subplots()
@@ -36,5 +37,6 @@ peri.plot_output(ax)
 plt.show()
 
 # write ordered data to file (for template processing)
-pickle.dump(peri.get_ordered_output(), open("ordered_output.pkl", "wb"))
+# pickle.dump(peri.get_ordered_output(), open("ordered_output.pkl", "wb"))
+pickle.dump((peri.chunks, sig_len_n), open("chunks.pkl", "wb"))
 

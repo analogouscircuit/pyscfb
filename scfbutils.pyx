@@ -15,6 +15,7 @@ cimport numpy as np
 cimport cython
 cimport scfbutils_d as scd
 from libc.math cimport cos, sin, fabs, log, exp
+from libc.stdlib cimport malloc, free
 
 
 ################################################################################
@@ -30,6 +31,83 @@ def template_vals(double[:] freqs, double f0, double sigma, int num_h):
 ################################################################################
 # Cython Functions
 ################################################################################
+
+cdef class TemplateData:
+    '''
+    An extension type to allow multiple templates to use the same processed
+    data.
+    '''
+
+    cdef scd.f_list **f_est_list;
+    cdef scd.fs_struct fs
+    cdef int k, p
+    cdef int num_chunks
+    cdef int chunk_len, sig_len_n
+
+    def __cinit__(self, chunks, sig_len):
+        self.sig_len_n = sig_len
+        self.num_chunks = len(chunks)
+        self.f_est_list = <scd.f_list**>malloc(self.sig_len_n*sizeof(scd.f_list*))
+        for k in range(self.sig_len_n):
+            self.f_est_list[k] = <scd.f_list*>malloc(sizeof(scd.f_list))
+            scd.init_f_list(self.f_est_list[k])
+        for k in range(self.num_chunks):
+            chunk = chunks[k]
+            chunk_len = len(chunk[0])
+            for p in range(chunk_len):
+                scd.fl_push(chunk[1][p], self.f_est_list[chunk[0][p]])
+
+    def __dealloc__(self):
+        for k in range(self.sig_len_n):
+            # while self.f_est_list[k]->count > 0:
+            #     scd.fl_pop(self.f_est_list[k])
+            scd.free_f_list(self.f_est_list[k])
+        free(self.f_est_list)
+
+
+cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
+        double mu):
+    cdef scd.fs_struct fs
+    fs = scd.template_adapt_c(td.f_est_list, td.sig_len_n, f0, mu, num_h, sigma)
+    cdef double[::1] freqs = <double[:td.sig_len_n]>fs.freqs;
+    cdef double[::1] strengths = <double[:td.sig_len_n]>fs.strengths;
+    return np.asarray(freqs), np.asarray(strengths)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
+        mu, int num_h, double sigma):
+    '''
+    recall that chunks is a list of tuples, and each tuple consists of two
+    lists: one of indices, one of frequency values.
+    '''
+    # First reorganize the data into a series of linked lists for each time
+    # index.
+    cdef scd.f_list **f_est_list = <scd.f_list**>malloc(sig_len_n*sizeof(scd.f_list*))
+    cdef scd.fs_struct fs
+    cdef int k, p
+    cdef int num_chunks = len(chunks)
+    cdef int chunk_len
+    for k in range(sig_len_n):
+        f_est_list[k] = <scd.f_list*>malloc(sizeof(scd.f_list))
+        scd.init_f_list(f_est_list[k])
+    for k in range(num_chunks):
+        chunk = chunks[k]
+        chunk_len = len(chunk[0])
+        for p in range(chunk_len):
+            scd.fl_push(chunk[1][p], f_est_list[chunk[0][p]])
+
+    # Then do the actual template adaptation
+    fs = scd.template_adapt_c(f_est_list, sig_len_n, f0, mu, num_h, sigma)
+
+    # Finally put the results into numpy arrays (via memory views) and return
+    # the results.
+    cdef double[::1] freqs = <double[:sig_len_n]>fs.freqs;
+    cdef double[::1] strengths = <double[:sig_len_n]>fs.strengths;
+    return np.asarray(freqs), np.asarray(strengths)
+
+            
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
