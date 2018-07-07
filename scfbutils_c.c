@@ -7,7 +7,9 @@
  *
  */
 
+#include "scfbutils_c.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 double *template_vals(double *f_vals, int num_vals, double f0, double sigma, int num_h)
@@ -28,4 +30,33 @@ double *template_vals(double *f_vals, int num_vals, double f0, double sigma, int
 	}	
 	
 	return t_vals;
+}
+
+
+void init_f_list(f_list *list)
+{
+	list->head = NULL;
+	list->count = 0;
+}
+
+void fl_push(double freq, f_list *list)
+{
+	f_node *new = malloc(sizeof(f_node));
+	new->val = freq;
+	new->next = list->head;
+	list->head = new;
+	list->count += 1;
+}
+
+double fl_pop(f_list *list)
+{
+	if(list->head == NULL)
+	{
+		printf("Tried to pop an empty list! Exiting.\n");
+		exit(0);
+	}
+	double val = list->head->val;
+	list->head = list->head->next;
+	list->count -= 1;
+	return val;
 }
