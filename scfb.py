@@ -261,14 +261,17 @@ class Template:
 ################################################################################
 class TemplateArray:
     def __init__(self, chunks, sig_len, f0_vals, num_h, sigma, mu):
+        print("Constructing linked list...")
         self.data = scfbutils.TemplateData(chunks, sig_len)
         self.templates = []
+        print("Generating Templates...")
         for f0 in f0_vals:
             self.templates.append(Template(f0, num_h, sigma, mu))
-            print(self.templates[-1].f0)
 
     def adapt(self):
+        print("Adapting templates...")
         for k, t in enumerate(self.templates):
-            print("Adapting template {}".format(k+1))
+            # print("Adapting template {}".format(k+1))
             t.adapt(self.data)
+        print("Done adapting!")
 
