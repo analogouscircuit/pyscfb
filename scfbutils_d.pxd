@@ -20,6 +20,10 @@ cdef extern from "scfbutils_c.h":
     fs_struct template_adapt_c(f_list **f_estimates, int list_len, 
             double f0, double mu, int num_h, double sigma)
 
+    double *wta_net_c(double *E, double *k, int num_n, int sig_len,
+                        double dt, double *tau, double M, double N,
+                        double sigma)
+
     void init_f_list(f_list *l)
 
     void free_f_list(f_list *l)

@@ -1,7 +1,7 @@
 /*
  * Header file for all functions and structures defined in scfbutils_c.c. Must
  * be available for scfbutils.d.pxd file, where all relevant contents must be
- * redclared in appropriate Cython format
+ * redeclared in appropriate Cython format
  *
  */
 
@@ -38,6 +38,17 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma,
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 						   double mu, int num_h, double sigma);
+
+double *wta_net_c(double *E, double *k, int num_n, int sig_len, double dt,
+				 double *tau, double M, double N, double sigma);
+
+void rhs(double *x, double *E, double *out, int num_n, double *k, double *tau,
+			double M, double N, double sigma);
+
+	
+double naka_rushton(double p, double M, double N, double sigma);
+
+double plus(double a);
 
 void fl_push(double freq, f_list *l);
 

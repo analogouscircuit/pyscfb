@@ -56,6 +56,17 @@ cdef class TemplateData:
             scd.free_f_list(self.f_est_list[k])
         free(self.f_est_list)
 
+cdef class _finalizer:
+    '''
+    Simple extension type.  Used to assigned responsibility for freeing
+    C-allocated heap memory to a python object. Taken from K.W. Smith's Cython
+    book.
+    '''
+    cdef void *_data
+    def __dealloc(self):
+        if self._data is not NULL:
+            free(self._data)
+
 
 
 ################################################################################
@@ -66,6 +77,14 @@ def template_vals(double[:] freqs, double f0, double sigma, int num_h):
     cdef unsigned int length = len(freqs)
     return <double[:length]> scd.template_vals_c(&freqs[0], length, f0, sigma, num_h)
 
+def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
+        double[:] tau, double M, double N, double sigma):
+    cdef double *out = scd.wta_net_c(&E[0,0], &k[0,0], num_n, sig_len, dt, 
+                                        &tau[0], M, N, sigma)
+    cdef double [:,::1] out_mv = <double[:num_n,:sig_len]>out
+    cdef np.ndarray out_np = np.asarray(out_mv)
+    set_base(out_np, out)
+    return out_np
 
 cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
         double mu):
@@ -80,6 +99,11 @@ cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
 ################################################################################
 # Cython Functions
 ################################################################################
+cdef void set_base(np.ndarray array, void *carray):
+    cdef _finalizer f = _finalizer()
+    f._data = <void*>carray
+    np.set_array_base(array, f)
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
