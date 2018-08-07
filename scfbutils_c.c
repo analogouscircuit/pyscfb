@@ -16,7 +16,7 @@
 
 
 /*
- * Function: 	template_vals
+ * Function: 	template_vals_c
  * --------------------------
  * This produces all the template values, given a set of frequencies at
  * which to calculate. Primarily useful for visualizing the templates, but
@@ -24,7 +24,8 @@
  * complete inner-product calculation.
  */
 
-double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h)
+double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h,
+						double scale, double beta)
 {
 
 	double *t_vals = malloc(num_vals * sizeof(double));
@@ -34,14 +35,47 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, i
 	for(int k = 0; k < num_vals; k++) {
 		t_vals[k] = 0.0;
 		for(int p = 1; p < lim; p++) {
-			factor = p == 1 ? 1.0 : 0.8;
+			//factor = p == 1 ? 1.0 : 0.8;
+			factor = scale*pow( (1./p), beta);
 			//t_vals[k] += exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma, 2)) );
-			t_vals[k] += factor * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(0.03*p*f0, 2)) );
+			//t_vals[k] += factor * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(0.03*p*f0, 2)) );
+			t_vals[k] += factor * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
 		}
 	}	
 	return t_vals;
 }
 
+/*
+ * Function: 	template_dvals_c
+ * --------------------------
+ * This produces all the values of the derivative of the template (w.r.t to f0), 
+ * given a set of frequencies at
+ * which to calculate. Primarily useful for visualizing the templates, but
+ * could also be used if the input is non-sparse and one wishes to do a
+ * complete inner-product calculation.
+ */
+
+double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h,
+						 double scale, double beta)
+{
+
+	double *t_vals = malloc(num_vals * sizeof(double));
+	double factor, app, coef;
+	int lim = num_h+1;
+	
+	for(int k = 0; k < num_vals; k++) {
+		t_vals[k] = 0.0;
+		for(int p = 1; p < lim; p++) {
+			//factor = p == 1 ? 1.0 : 0.8;
+			factor = scale*pow( (1./p), beta);
+			app = sigma*p*f0;
+			app = app*app; 		// want squared
+			coef = (f_vals[k]*(f_vals[k] - p*f0))/(f0*app);
+			t_vals[k] += factor * coef * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
+		}
+	}	
+	return t_vals;
+}
 
 /*
  * Function: 	template_adapt_c
@@ -50,16 +84,19 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, i
  *  list containing a variable number of frequency estimates for each moment in
  *  time. Performs a gradient ascent calculation to determine the appropriate
  *  adaptation behavior. Also calculates the instantaneous strength (how well
- *  the template matches the input).
+ *  the template matches the input). (Need to double check analytical
+ *  expressions and make them correspond with template_vals_c(...).
  */
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, 
-						   double mu, int num_h, double sigma)
+						   double mu, int num_h, double sigma, double scale,
+						   double beta)
 {
 	int k, n, p;
 	double *f= malloc(list_len*sizeof(double)); 	// freqs
 	double *s= malloc(list_len*sizeof(double)); 	// strengths
 	double dJ, temp, factor, freq;
+	double fmpp, app;
 	fs_struct fs;
 	f[0] = f0;
 	for(k = 0; k < list_len-1; k++) {
@@ -68,10 +105,15 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 		for(n = 0; n < f_estimates[k]->count; n++) {
 			freq = fl_by_idx(n, f_estimates[k]);
 			for(p = 1; p < num_h+1; p++) {
-				factor = p == 1 ? 1.0 : 0.8;
-				temp = factor * exp( - pow(freq - p*f[k],2)/(2*pow(sigma, 2)));
+				//factor = p == 1 ? 1.0 : 0.8;
+				factor = scale*pow( (1./p), beta);
+				//temp = factor * exp( - pow(freq - p*f[k],2)/(2*pow(sigma, 2)));
+				temp = factor * exp( - pow(freq - p*f[k],2)/(2*pow(sigma*p*f[k], 2)));
 				s[k] += temp;
-				dJ += temp*(freq - p*f[k])/(p * pow(sigma, 2));
+				//dJ += temp*(freq - p*f[k])/(p * pow(sigma, 2));
+				fmpp = freq-p*f[k];
+				app = sigma*p*f[k];
+				dJ += temp*( p*fmpp/pow(app,2) + sigma*p*pow(fmpp,2)/pow(app,3));
 			}
 		}
 		f[k+1] = f[k] + mu*dJ;
@@ -81,7 +123,59 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 	return fs;
 }
 
+
 /*
+ * Function: 	template_adapt_num_c
+ * -----------------------------
+ * Template adaptation with numerical template (not analytical calculation) 
+ */
+
+
+fs_struct template_adapt_num_c(f_list **f_estimates, int list_len, double *f_range, int f_len, 
+							double *temp, double *temp_grad, double f0, double mu)
+{
+	int k, n;
+	double *f= malloc(list_len*sizeof(double)); 	// freqs
+	double *s= malloc(list_len*sizeof(double)); 	// strengths
+	double dJ, freq;
+	fs_struct fs;
+	f[0] = f0;
+	for(k = 0; k < list_len-1; k++) {
+		s[k] = 0.0;
+		dJ = 0.0;
+		for(n = 0; n < f_estimates[k]->count; n++) {
+			freq = fl_by_idx(n, f_estimates[k]);
+			s[k] = lin_interp(freq, f_range, temp, f_len);
+			dJ = lin_interp(freq, f_range, temp_grad, f_len); 
+		}
+		f[k+1] = f[k] + mu*dJ;
+		fs.freqs = f;
+		fs.strengths = s;
+	}
+	return fs;
+}
+
+/*
+ * Function: 	lin_interp
+ * ---------------------------------
+ * Simple linear interpolation function. Note that this can be made faster
+ * by writing it inline, so that step_size (etc.) doesn't have to be
+ * recalculated with every call.
+ *
+ */
+
+double lin_interp(double x_val, double *x_vals, double *y_vals, int len)
+{
+	if(x_val < x_vals[0] || x_val > x_vals[len]) return 0;
+	double step_size = (x_vals[len] - x_vals[0])/len;
+	int idx = (x_val - x_vals[0])/step_size;
+	double w0 = (x_val - x_vals[idx])/step_size;
+	return w0*x_vals[idx] + (1.0-w0)*x_vals[idx+1];
+}
+
+/*
+ * Function: 	wta_net_c
+ * -----------------------------
  * Functions for performing the winner-take-all (WTA) network calculations. This
  * is just an implementation of the fourth-order Runge-Kutta method for a system
  * of equations. The 'right hand side' used for this system in contained in the
@@ -92,8 +186,8 @@ double *wta_net_c(double *E, double *k, int num_n, int sig_len, double dt,
 				 double *tau, double M, double N, double sigma)
 {
 	double *x;
-	double x_input[num_n];
-	double E_input[num_n];
+	double x_col[num_n];
+	double E_col[num_n];
 	double *x_old; 	// initial conditions
 	double K1[num_n], K2[num_n], K3[num_n], K4[num_n];
 	int i, j, t;
@@ -103,41 +197,35 @@ double *wta_net_c(double *E, double *k, int num_n, int sig_len, double dt,
 	x = calloc(num_n * sig_len, sizeof(double));
 	x_old = calloc(num_n, sizeof(double));
 
-	printf("E_input[0]: %f\n",   E[0*sig_len + 10]);
-    printf("E_input[1]: %f\n",   E[1*sig_len + 10]);
-	printf("E_input[2]: %f\n",   E[2*sig_len + 10]);  
-    printf("E_input[3]: %f\n",   E[3*sig_len + 10]);
-	printf("E_input[4]: %f\n\n", E[4*sig_len + 10]);
-
 	for(t = 0; t < sig_len-1; t++) {
 		// Find K1 vals
 		for(i = 0; i < num_n; i++) {
-			x_input[i] = x[i*sig_len + t];
+			x_col[i] = x[i*sig_len + t];
 			sum = 0;
 			for(j = 0; j < num_n; j++){
 				if(j!=i) sum += k[j*num_n+i]*x[j*sig_len + t];
 			}
-			E_input[i] = plus(E[i*sig_len + t] - sum);
+			E_col[i] = plus(E[i*sig_len + t] - sum);
 		}
-		rhs(x_input, E_input, K1, num_n, k, tau, M, N, sigma);
+		rhs(x_col, E_col, K1, num_n, k, tau, M, N, sigma);
 		
 		// Find K2 vals
 		for(i = 0; i < num_n; i++) {
-			x_input[i] = x[i*sig_len + t] + hdt*K1[i];
+			x_col[i] = x[i*sig_len + t] + hdt*K1[i];
 		}
-		rhs(x_input, E_input, K2, num_n, k, tau, M, N, sigma);
+		rhs(x_col, E_col, K2, num_n, k, tau, M, N, sigma);
 
 		// Find K3 vals
 		for(i = 0; i < num_n; i++) {
-			x_input[i] = x[i+sig_len + t] + hdt*K2[i];
+			x_col[i] = x[i+sig_len + t] + hdt*K2[i];
 		}
-		rhs(x_input, E_input, K3, num_n, k, tau, M, N, sigma);
+		rhs(x_col, E_col, K3, num_n, k, tau, M, N, sigma);
 
 		// Find K4 vals
 		for(i = 0; i < num_n; i++) {
-			x_input[i] = x[i*sig_len+t] + dt*K3[i];
+			x_col[i] = x[i*sig_len+t] + dt*K3[i];
 		}
-		rhs(x_input, E_input, K4, num_n, k, tau, M, N, sigma);	
+		rhs(x_col, E_col, K4, num_n, k, tau, M, N, sigma);	
 
 		// Finally calculate update
 		for(i = 0; i < num_n; i++) {

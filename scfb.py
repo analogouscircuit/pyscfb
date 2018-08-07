@@ -136,7 +136,7 @@ class FDL:
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/15.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/8.0     # 8.0-12.0 is a good range
         # lp_cutoff = 50.0
         # self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
@@ -148,7 +148,7 @@ class FDL:
         tau_g = (dsp.group_delay( (self.b_c, self.a_c), np.pi*(f_c*2/f_s) )[1] 
                     + dsp.group_delay( (self.b_lpf, self.a_lpf), np.pi*(f_c*2/f_s) )[1]) 
         tau_g = tau_g*self.dt    # Convert from samples to time
-        tau_s = 15.0/f_c    # Settling time -- paper gives 50.0/f_c, but
+        tau_s = 10.0/f_c    # Settling time -- paper gives 50.0/f_c, but
                             # 15.0 seems to work better with our filters
 
         # Calculate control loop parameters
@@ -187,9 +187,9 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 1e-32 # threshold for determining locked condition
-        self.min_e = 0.1    # minimum energy for locking condition
-        # self.min_e = 100./self.f_c   # allow less energy in upper reginos (1/f)
+        self.eps = 1e-52 # threshold for determining locked condition
+        # self.min_e = 0.0001    # minimum energy for locking condition
+        self.min_e = 15./self.f_c   # allow less energy in upper reginos (1/f)
 
     def process_data(self, in_sig):
         '''
@@ -243,35 +243,105 @@ class FDL:
 class Template:
     '''
     '''
-    def __init__(self, f0, num_h, sigma=10.0, mu=0.1):
+    def __init__(self, f0, num_h, sigma=0.03, mu=1.0, scale=1.0, beta=1.0):
         self.f0 = f0
         self.num_h = num_h
         self.mu = mu
         self.sig = sigma
+        self.scale = scale
+        self.beta = beta
         self.f_vals = []
         self.strengths = []
 
     def adapt(self, td):
         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
-                self.mu)
+                self.mu, self.scale, self.beta)
+         
+        # template_adapt_num(TemplateData td, double f0, double[::1] f_vals,
+        #     double[::1] template, double[::1] template_grad, double mu=1.0):
         self.f_vals = phi
         self.strengths = s
+
+# ################################################################################
+# class TemplateNum:
+#     '''
+#     f_vals must be equally shaped (step size must be consistent)
+#     '''
+#     def __init__(self, f0, f_vals, temp_shape, mu=1.0):
+#         self.mu = mu
+#         self.f0 = f0
+#         self.step_size = f_vals[1] - f_vals[0]
+#         self.f_vals = f_vals
+#         self.temp_shape = temp_shape
+#         self.temp_grad = -np.gradient(self.temp_shape, self.step_size)
+#         self.phi_vals = []
+#         self.strengths = []
+# 
+#     def adapt(self, td):
+#         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
+#                 self.mu, self.scale, self.beta)
+#          
+#         self.phi_vals, self.strengths = template_adapt_num(td, self.f0,
+#                 self.f_vals, self.temp_shape, self.temp_grad, self.mu):
+#         self.phi_vals = phi
+#         self.strengths = s
+# 
+# ################################################################################
+# class TemplateArrayNum:
+#     def __init__(self, chunks, sig_len, f0_vals, num_h=5, sigma=0.03, mu=1.0, scale=1.0,
+#             beta=1.0):
+#         print("Constructing linked list...")
+#         self.f0_vals = f0_vals
+#         self.sig_len = sig_len
+#         self.data = scfbutils.TemplateData(chunks, sig_len)
+#         self.templates = []
+#         print("Generating Templates...")
+#         for f0 in f0_vals:
+#             self.templates.append(Template(f0, num_h, sigma, mu, scale, beta))
+# 
+#     def new_data(self, chunks, sig_len, reset=True):
+#         self.sig_len = sig_len
+#         self.data = scfbutils.TemplateData(chunks, self.sig_len)
+#         if reset == True:
+#             for k, t in enumerate(self.templates):
+#                 t.f0 = self.f0_vals[k]
+# 
+#     def adapt(self, verbose=False):
+#         print("Adapting templates...")
+#         for k, t in enumerate(self.templates):
+#             if verbose:
+#                 print("Adapting template {}".format(k+1))
+#             t.adapt(self.data)
+#         print("Done adapting!")
 
 
 ################################################################################
 class TemplateArray:
-    def __init__(self, chunks, sig_len, f0_vals, num_h, sigma, mu):
+    def __init__(self, chunks, sig_len, f0_vals, num_h=5, sigma=0.03, mu=1.0, scale=1.0,
+            beta=1.0):
         print("Constructing linked list...")
+        self.f0_vals = f0_vals
+        self.sig_len = sig_len
         self.data = scfbutils.TemplateData(chunks, sig_len)
         self.templates = []
         print("Generating Templates...")
         for f0 in f0_vals:
-            self.templates.append(Template(f0, num_h, sigma, mu))
+            self.templates.append(Template(f0, num_h, sigma, mu, scale, beta))
 
-    def adapt(self):
-        print("Adapting templates...")
+    def new_data(self, chunks, sig_len, reset=True):
+        self.sig_len = sig_len
+        self.data = scfbutils.TemplateData(chunks, self.sig_len)
+        if reset == True:
+            for k, t in enumerate(self.templates):
+                t.f0 = self.f0_vals[k]
+
+    def adapt(self, verbose=False):
+        if verbose:
+            print("Adapting templates...")
         for k, t in enumerate(self.templates):
-            # print("Adapting template {}".format(k+1))
+            if verbose:
+                print("Adapting template {}".format(k+1))
             t.adapt(self.data)
-        print("Done adapting!")
+        if verbose:
+            print("Done adapting!")
 

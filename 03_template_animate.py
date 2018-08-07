@@ -8,6 +8,8 @@ templates = pickle.load(open('template_data.pkl', 'rb'))
 sig_len = len(templates[0].f_vals)
 fig, ax = plt.subplots()
 ax.set_xscale('log')
+# freqs = np.arange(20., 4000., 0.5)
+
 lines = []
 for t in templates:
     ln, = plt.plot([t.f_vals[0], t.f_vals[0]], [0, t.strengths[0]])
@@ -24,7 +26,7 @@ def update(k):
                 [0, templates[n].strengths[k]])
     return lines,
     
-ani = FuncAnimation(fig, update, frames=np.arange(0, sig_len, 20, dtype=int),
+ani = FuncAnimation(fig, update, frames=np.arange(0, sig_len, 100, dtype=int),
         init_func=init, interval=.0001, repeat=False)
 
 plt.show()

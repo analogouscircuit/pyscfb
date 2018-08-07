@@ -73,9 +73,17 @@ cdef class _finalizer:
 # Wrapped C Functions
 ################################################################################
 
-def template_vals(double[:] freqs, double f0, double sigma, int num_h):
+def template_vals(double[:] freqs, double f0, double sigma, int num_h, double
+        scale=1.0, double beta=1.0):
     cdef unsigned int length = len(freqs)
-    return <double[:length]> scd.template_vals_c(&freqs[0], length, f0, sigma, num_h)
+    return <double[:length]> scd.template_vals_c(&freqs[0], length, f0, sigma,
+            num_h, scale, beta)
+
+def template_dvals(double[:] freqs, double f0, double sigma, int num_h, double
+        scale=1.0, double beta=1.0):
+    cdef unsigned int length = len(freqs)
+    return <double[:length]> scd.template_dvals_c(&freqs[0], length, f0, sigma,
+            num_h, scale, beta)
 
 def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
         double[:] tau, double M, double N, double sigma):
@@ -87,14 +95,22 @@ def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
     return out_np
 
 cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
-        double mu):
+        double mu, double scale = 1.0, double beta = 1.0):
     cdef scd.fs_struct fs
-    fs = scd.template_adapt_c(td.f_est_list, td.sig_len_n, f0, mu, num_h, sigma)
+    fs = scd.template_adapt_c(td.f_est_list, td.sig_len_n, f0, mu, num_h, sigma,
+            scale, beta)
     cdef double[::1] freqs = <double[:td.sig_len_n]>fs.freqs;
     cdef double[::1] strengths = <double[:td.sig_len_n]>fs.strengths;
     return np.asarray(freqs), np.asarray(strengths)
 
-
+cpdef tuple template_adapt_num(TemplateData td, double f0, double[::1] f_vals,
+        double[::1] template, double[::1] template_grad, double mu=1.0):
+    cdef scd.fs_struct fs
+    fs = scd.template_adapt_num_c(td.f_est_list, td.sig_len_n, &f_vals[0],
+            len(f_vals), &template[0], &template_grad[0], f0, mu)
+    cdef double[::1] freqs = <double[:td.sig_len_n]>fs.freqs;
+    cdef double[::1] strengths = <double[:td.sig_len_n]>fs.strengths;
+    return np.asarray(freqs), np.asarray(strengths)
 
 ################################################################################
 # Cython Functions
@@ -108,7 +124,7 @@ cdef void set_base(np.ndarray array, void *carray):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
-        mu, int num_h, double sigma):
+        mu, int num_h, double sigma, double scale = 1.0, double beta = 1.0):
     '''
     recall that chunks is a list of tuples, and each tuple consists of two
     lists: one of indices, one of frequency values.
@@ -130,7 +146,8 @@ cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
             scd.fl_push(chunk[1][p], f_est_list[chunk[0][p]])
 
     # Then do the actual template adaptation
-    fs = scd.template_adapt_c(f_est_list, sig_len_n, f0, mu, num_h, sigma)
+    fs = scd.template_adapt_c(f_est_list, sig_len_n, f0, mu, num_h, sigma,
+            scale, beta)
 
     # Finally put the results into numpy arrays (via memory views) and return
     # the results.
@@ -146,7 +163,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         np.ndarray[np.float64_t] b_lpf, np.ndarray[np.float64_t] a_lpf, double scale_fac,
         double min_e, double eps, double k_i, double k_p):
     '''
-    Called FDL class.
+    Called in FDL class.
     Function that actually performs the adaptive filtering. Generates a
     list of 3-element tuples (f0, times, output). All of these are needed
     to initiate the PLL stage.

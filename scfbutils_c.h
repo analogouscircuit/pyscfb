@@ -34,10 +34,20 @@ typedef struct fs_struct_s {
  */
 
 double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, 
-					    int num_h);
+					    int num_h, double scale, double beta);
+
+double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, 
+						int num_h, double scale, double beta);
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
-						   double mu, int num_h, double sigma);
+						   double mu, int num_h, double sigma, double scale,
+						   double beta);
+
+fs_struct template_adapt_num_c(f_list **f_estimates, int list_len,
+							double *f_range, int f_len, double *temp,
+							double *temp_grad, double f0, double mu);
+
+double lin_interp(double x_val, double *x_vals, double *y_vals, int len);
 
 double *wta_net_c(double *E, double *k, int num_n, int sig_len, double dt,
 				 double *tau, double M, double N, double sigma);
