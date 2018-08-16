@@ -13,6 +13,6 @@ if __name__=="__main__":
     sigma = 0.02 
     mu = 0.1
     temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, num_h, sigma, mu)
-    temp_array.adapt()
+    temp_array.adapt(verbose=True)
 
     pickle.dump(temp_array.templates, open('template_data.pkl', 'wb'))

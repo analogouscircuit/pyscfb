@@ -50,13 +50,27 @@ for q in range(num_h):
 
 pitch_rel /= num_h
 fig = plt.figure()
-ax1 = fig.add_subplot(2,1,1)
-ax2 = fig.add_subplot(2,1,2)
-ax1.plot((mistunings-1)*100, (pitch_rel-1)*100.)
+ax1 = fig.add_subplot(1,2,1)
+ax2 = fig.add_subplot(1,2,2)
+
+ax1.set_ylabel("Perceived pitch shift (percentage)", size=14)
+ax1.set_xlabel("Degree of partial mistuning (percentage)", size=14)
+ax2.set_ylabel("Perceived pitch (Hz)",size=14)
+ax2.set_xlabel("Lowest frequency as multiple of\nmissing fundamental frequency",
+        size=14)
+ax1.tick_params(labelsize=12)
+ax2.tick_params(labelsize=12)
+
+ax1.plot((mistunings-1)*100, (pitch_rel-1)*100., color='b')
 
 
 # Shift Complex -- experiment parameters
 mistunings = np.arange(2.5, 5.5, 0.05)
+idcs1 = mistunings < 3.45
+idcs3 = mistunings > 4.45
+idcs2 = np.array(idcs1 + idcs3, dtype=int)
+idcs2 = np.ones_like(idcs2,dtype=bool) - idcs2
+idcs2 = np.array(idcs2, dtype=bool)
 num_h = 12
 f0 = 200
 t_freqs = np.logspace(np.log10(f0), np.log10(f0), 1)
@@ -79,5 +93,7 @@ for k in range(len(mistunings)):
     pitch_idx = np.argmax(strengths)
     pitches[k] = temp_array.templates[pitch_idx].f_vals[-1]
 
-ax2.plot(mistunings, pitches)
+ax2.plot(mistunings[idcs1], pitches[idcs1], color='b')
+ax2.plot(mistunings[idcs2], pitches[idcs2], color='b')
+ax2.plot(mistunings[idcs3], pitches[idcs3], color='b')
 plt.show()
