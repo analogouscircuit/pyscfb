@@ -201,7 +201,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         np.ndarray[np.int32_t] off_record = np.zeros(sig_len-buf_size+1, dtype=np.int32) 
         int num_on = 0
         int is_locked = 0   # assume FDL is not tracking initially
-        
+        double adaptation_bound = 0.75*bw 
 
     for k in range(buf_size-1, sig_len):
         # Update coefficients
@@ -284,26 +284,39 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         f_c = f_c_base + u[idx0]
         
         ## reset if outside of range
-        if f_c > f_c_base + 0.75*bw:
+        # if f_c > f_c_base + adaptation_bound:
+        #     if is_locked == 1:
+        #         is_locked = 0
+        #         off_record[num_on-1] = k - offset
+        #     f_c = f_c_base + adaptation_bound
+        #     out_l *= 0
+        #     out_u *= 0
+        #     env_l *= 0
+        #     env_u *= 0
+        #     u *= 0
+        # if f_c < f_c_base - adaptation_bound:
+        #     if is_locked == 1:
+        #         is_locked = 0
+        #         off_record[num_on-1] = k - offset
+        #     f_c = f_c_base - adaptation_bound 
+        #     out_l *= 0
+        #     out_u *= 0
+        #     env_l *= 0
+        #     env_u *= 0
+        #     u *= 0
+
+        ## set lower limit of adaptation
+        if f_c < 80.0:
             if is_locked == 1:
                 is_locked = 0
                 off_record[num_on-1] = k - offset
-            f_c = f_c_base
+            f_c = 80.0
             out_l *= 0
             out_u *= 0
             env_l *= 0
             env_u *= 0
             u *= 0
-        if f_c < f_c_base - 0.75*bw:
-            if is_locked == 1:
-                is_locked = 0
-                off_record[num_on-1] = k - offset
-            f_c = f_c_base
-            out_l *= 0
-            out_u *= 0
-            env_l *= 0
-            env_u *= 0
-            u *= 0
+            
         
         f_record[k] = f_c
 
@@ -348,7 +361,7 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
     cdef double pi = np.pi
     cdef double mu = 0.120*(f_c/4000.)
     cdef double dt = 1./f_s
-    cdef double lp_cutoff = f_c/5.0
+    cdef double lp_cutoff = f_c/4.5     #5.0 is original tuning
     cdef double b_lp0, b_lp1, b_lp2, a_lp1, a_lp2
     cdef double b_s0, b_s1, b_s2, a_s1, a_s2
     cdef np.ndarray[np.float64_t] b_lp, a_lp, b_s, a_s
@@ -366,12 +379,13 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
     cdef unsigned int idx2 = 0
     cdef int k
     cdef double t = 0
+    cdef double loop_gain = 1.0
     for k in range(buf_size - 1, sig_len):
         t = (k - buf_size + 1)*dt
         idx0 = (idx0 + 1)%buf_size
         idx1 = (idx1 + 1)%buf_size
         idx2 = (idx2 + 1)%buf_size
-        mod_sig[idx0] = in_sig[k]*sin(2*pi*f_c*t + phi[k-1]) 
+        mod_sig[idx0] = in_sig[k]*sin(2*pi*f_c*t + phi[k-1])*loop_gain
         lp_out[idx0] = b_lp[0]*mod_sig[idx0] + b_lp[1]*mod_sig[idx1] \
                      + b_lp[2]*mod_sig[idx2] - a_lp[1]*lp_out[idx1] \
                      - a_lp[2]*lp_out[idx2]

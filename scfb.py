@@ -136,7 +136,7 @@ class FDL:
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/8.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/10.0     # 8.0-12.0 is a good range
         # lp_cutoff = 50.0
         # self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
@@ -148,7 +148,7 @@ class FDL:
         tau_g = (dsp.group_delay( (self.b_c, self.a_c), np.pi*(f_c*2/f_s) )[1] 
                     + dsp.group_delay( (self.b_lpf, self.a_lpf), np.pi*(f_c*2/f_s) )[1]) 
         tau_g = tau_g*self.dt    # Convert from samples to time
-        tau_s = 10.0/f_c    # Settling time -- paper gives 50.0/f_c, but
+        tau_s = 15.0/f_c    # Settling time -- paper gives 50.0/f_c, but
                             # 15.0 seems to work better with our filters
 
         # Calculate control loop parameters
@@ -187,9 +187,9 @@ class FDL:
         self.scale_fac = r_l/r_u
         # self.scale_fac = 1.       # to compare without correction
 
-        self.eps = 1e-52 # threshold for determining locked condition
-        # self.min_e = 0.0001    # minimum energy for locking condition
-        self.min_e = 15./self.f_c   # allow less energy in upper reginos (1/f)
+        self.eps = 1e-305 # locking threshold for determining locked condition
+        # self.min_e = 0.01    # minimum energy for locking condition
+        self.min_e = 25./self.f_c   # allow less energy in upper reginos (1/f)
 
     def process_data(self, in_sig):
         '''
