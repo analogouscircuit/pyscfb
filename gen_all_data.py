@@ -29,6 +29,7 @@ else:
         seg_r = (sus_val+1) - np.exp(gamma*t_r)
         seg_s = np.ones(t_s_n)*sus_val
         return np.concatenate([seg_a, seg_d, seg_s, seg_r])
+    f_name = 'dkdf'
     f_s = 44100
     dt = 1/f_s
     num_h = 10 
@@ -81,7 +82,7 @@ templates = temp_array.templates    # probably pickle this
 t = np.arange(len(templates[0].strengths))*(1./44100)
 strengths = [t.strengths for t in templates]
 strengths = np.ascontiguousarray(np.flipud(np.stack(strengths, axis=0)))
-k = np.ones((strengths.shape[0], strengths.shape[0]))*20. # inhibition constant
+k = np.ones((strengths.shape[0], strengths.shape[0]))*10. # inhibition constant
 # more elaborate inhibition schemes commented out below
 # max_val = strengths.shape[0]*strengths.shape[1]
 # for i in range(strengths.shape[0]):
@@ -94,5 +95,6 @@ wta_out = scfbutils.wta_net(strengths, k, strengths.shape[0], strengths.shape[1]
         1./44100, tau, 1., 2., 1.2)     # pickle this as well
 print("Finished WTAN calculations!")
 
-pickle.dump((chunks, templates, wta_out), open('batch_data_for_animation.pk',
-    'wb'))
+pickle.dump((in_sig, f_s, freqs, chunks, templates, wta_out),
+        open('batch_data_{}.pkl'.format(f_name),
+            'wb'))

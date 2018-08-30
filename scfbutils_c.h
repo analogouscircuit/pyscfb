@@ -41,7 +41,7 @@ double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma,
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 						   double mu, int num_h, double sigma, double scale,
-						   double beta);
+						   double beta, double f_lo, double f_hi);
 
 fs_struct template_adapt_num_c(f_list **f_estimates, int list_len,
 							double *f_range, int f_len, double *temp,

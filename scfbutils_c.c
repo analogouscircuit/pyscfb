@@ -90,7 +90,7 @@ double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, 
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, 
 						   double mu, int num_h, double sigma, double scale,
-						   double beta)
+						   double beta, double f_lo, double f_hi)
 {
 	int k, n, p;
 	double *f= malloc(list_len*sizeof(double)); 	// freqs
@@ -117,6 +117,9 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 			}
 		}
 		f[k+1] = f[k] + mu*dJ;
+		// clip adaptation range of template
+		if(f[k+1] > f_hi) f[k+1] = f_hi;
+		if(f[k+1] < f_lo) f[k+1] = f_lo;
 		fs.freqs = f;
 		fs.strengths = s;
 	}

@@ -95,10 +95,11 @@ def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
     return out_np
 
 cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
-        double mu, double scale = 1.0, double beta = 1.0):
+        double mu, double scale = 1.0, double beta = 1.0, double f_lo=0., double
+        f_hi=20000.):
     cdef scd.fs_struct fs
     fs = scd.template_adapt_c(td.f_est_list, td.sig_len_n, f0, mu, num_h, sigma,
-            scale, beta)
+            scale, beta, f_lo, f_hi)
     cdef double[::1] freqs = <double[:td.sig_len_n]>fs.freqs;
     cdef double[::1] strengths = <double[:td.sig_len_n]>fs.strengths;
     return np.asarray(freqs), np.asarray(strengths)
@@ -124,7 +125,8 @@ cdef void set_base(np.ndarray array, void *carray):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
-        mu, int num_h, double sigma, double scale = 1.0, double beta = 1.0):
+        mu, int num_h, double sigma, double scale = 1.0, double beta = 1.0,
+        double f_lo=0., double f_hi=20000.):
     '''
     recall that chunks is a list of tuples, and each tuple consists of two
     lists: one of indices, one of frequency values.
@@ -147,7 +149,7 @@ cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
 
     # Then do the actual template adaptation
     fs = scd.template_adapt_c(f_est_list, sig_len_n, f0, mu, num_h, sigma,
-            scale, beta)
+            scale, beta, f_lo, f_hi)
 
     # Finally put the results into numpy arrays (via memory views) and return
     # the results.

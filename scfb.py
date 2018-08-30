@@ -243,19 +243,21 @@ class FDL:
 class Template:
     '''
     '''
-    def __init__(self, f0, num_h, sigma=0.03, mu=1.0, scale=1.0, beta=1.0):
+    def __init__(self, f0, num_h, sigma=0.03, mu=1.0, scale=1.0, beta=1.0,
+            limits=(0., 20000.)):
         self.f0 = f0
         self.num_h = num_h
         self.mu = mu
         self.sig = sigma
         self.scale = scale
         self.beta = beta
+        self.limits = limits
         self.f_vals = []
         self.strengths = []
 
     def adapt(self, td):
         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
-                self.mu, self.scale, self.beta)
+                self.mu, self.scale, self.beta, self.limits[0], self.limits[1])
          
         # template_adapt_num(TemplateData td, double f0, double[::1] f_vals,
         #     double[::1] template, double[::1] template_grad, double mu=1.0):
@@ -318,15 +320,19 @@ class Template:
 ################################################################################
 class TemplateArray:
     def __init__(self, chunks, sig_len, f0_vals, num_h=5, sigma=0.03, mu=1.0, scale=1.0,
-            beta=1.0):
+            beta=1.0, limits=None):
+        # if no limits given, let templates range over entire audible range
+        if limits == None:
+            limits = [(0., 20000.) for k in range(len(f0_vals))]
         print("Constructing linked list...")
         self.f0_vals = f0_vals
         self.sig_len = sig_len
         self.data = scfbutils.TemplateData(chunks, sig_len)
         self.templates = []
         print("Generating Templates...")
-        for f0 in f0_vals:
-            self.templates.append(Template(f0, num_h, sigma, mu, scale, beta))
+        for k, f0 in enumerate(f0_vals):
+            self.templates.append(Template(f0, num_h, sigma, mu, scale, beta,
+                limits[k]))
 
     def new_data(self, chunks, sig_len, reset=True):
         self.sig_len = sig_len
