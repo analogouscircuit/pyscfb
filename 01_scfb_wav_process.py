@@ -56,27 +56,50 @@ else:   # first 8 notes of Die Kunst der Fuge
         notes.append(note)
     in_sig = np.concatenate(notes)
     in_sig /= np.max(in_sig)
-    in_sig += np.random.normal(scale=np.sqrt(0.000000001 * f_s / 2), size=in_sig.shape)
+    in_sig += np.random.normal(scale=np.sqrt(0.0000000001 * f_s / 2), size=in_sig.shape)
     scipy.io.wavfile.write("dkdf.wav", f_s, in_sig)
     in_sig *= 4 
-
+# else:
+#     f_s = 44100
+#     dt = 1/f_s
+#     num_h = 10
+#     # freqs = [300, 300.*(5/4), 300.*(3/2)]
+#     freqs = [300, 300.*(3/2)]
+#     dur = 0.2
+#     t = np.arange(dur*f_s)/f_s
+#     in_sig = np.zeros_like(t)
+#     for freq in freqs:
+#         for p in range(1, num_h+1):
+#             in_sig += ((1/p)**0.0)*np.cos(2*np.pi*freq*p*t +
+#                     np.random.random(1)*2*np.pi)
+#     in_sig /= np.max(in_sig) 
 
 # process through SCFB
-peri = scfb.SCFB(100., 4000., 100, f_s)
+peri = scfb.SCFB(100., 4000., 150, f_s, filt_type='gammatone')
 peri.process_signal(in_sig, verbose=True)
 sig_len_n = len(in_sig)
 
 # plot results
 fig = plt.figure()
-ax1 = fig.add_subplot(1,2,1)
-ax2 = fig.add_subplot(1,2,2)
+ax1 = fig.add_subplot(1,3,1)
+ax2 = fig.add_subplot(1,3,2)
+ax3 = fig.add_subplot(1,3,3)
 
 ax1.plot(np.arange(len(in_sig))/f_s, in_sig)
 
+times = np.arange(len(in_sig))/f_s
+for n in range(peri.num_chan):
+    ax2.plot(times, peri.filtered_channels[n,:] + n, color='808080')
+    
+idcs = np.arange(0, peri.num_chan, 5)
+ax2.set_yticks(idcs)
+labels = ["{:.1f}".format(f) for f in peri.f_c[idcs]]
+ax2.set_yticklabels(labels)
+
 for fdl in peri.fdl:
-    ax2.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record, linewidth=0.7,
+    ax3.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record, linewidth=0.7,
             color='k', linestyle='--')
-peri.plot_output(ax2)
+peri.plot_output(ax3)
 plt.show()
 
 # write ordered data to file (for template processing)

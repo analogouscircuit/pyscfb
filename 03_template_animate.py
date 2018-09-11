@@ -4,11 +4,10 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import scfb
 
-templates = pickle.load(open('template_data.pkl', 'rb'))
+templates, freqs = pickle.load(open('template_data.pkl', 'rb'))
 sig_len = len(templates[0].f_vals)
 fig, ax = plt.subplots()
 ax.set_xscale('log')
-# freqs = np.arange(20., 4000., 0.5)
 
 lines = []
 for t in templates:

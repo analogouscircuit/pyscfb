@@ -61,9 +61,9 @@ peri_f_hi = 4000.
 num_templates = 100
 temp_f_lo = 50.0
 temp_f_hi = 4000.0
-temp_num_h = 5       # number of template bumps
-sigma = 0.02    # bump width parameters
-mu = 0.1        # adaptation rate
+temp_num_h = 6       # number of template bumps
+sigma = 0.03    # bump width parameters
+mu = 1        # adaptation rate
 # Other parameters
 sig_len_n = len(in_sig)
 
@@ -74,25 +74,35 @@ peri.process_signal(in_sig, verbose=True)
 ## process through templates 
 chunks = peri.chunks    # probably pickle this
 freqs = np.logspace(np.log10(temp_f_lo), np.log10(temp_f_hi), num_templates)
-temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, temp_num_h, sigma, mu)
+lims = np.sqrt(freqs[0:-1]*freqs[1:])
+lims = np.concatenate([[0], lims, [20000]])
+limits = []
+for k in range(len(freqs)):
+    limits.append((lims[k], lims[k+1]))
+temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, temp_num_h, sigma, mu,
+        limits=limits)
 temp_array.adapt(verbose=True)
 
 ## process through WTAN
 templates = temp_array.templates    # probably pickle this
 t = np.arange(len(templates[0].strengths))*(1./44100)
 strengths = [t.strengths for t in templates]
-strengths = np.ascontiguousarray(np.flipud(np.stack(strengths, axis=0)))
-k = np.ones((strengths.shape[0], strengths.shape[0]))*10. # inhibition constant
+# strengths = np.ascontiguousarray(np.flipud(np.stack(strengths, axis=0)))
+strengths = np.ascontiguousarray(np.stack(strengths, axis=0))
+k = np.ones((strengths.shape[0], strengths.shape[0]))*5. # inhibition constant
 # more elaborate inhibition schemes commented out below
 # max_val = strengths.shape[0]*strengths.shape[1]
 # for i in range(strengths.shape[0]):
 #     for j in range(strengths.shape[0]):
 #         k[i][j] = max_val/(max_val*(1 + abs(i-j))) + 2.
 # k *= 5
-tau = np.ones(strengths.shape[0])*0.001     # time constant for WTAN network
+tau = np.ones(strengths.shape[0])*0.02     # time constant for WTAN network
+M = 10.      # max spike rate (original: 1.)
+N = 2.      # slope
+sigma = 1.2*M # half-max point (original: 1.2)
 print("Running Winner-Take-All Network...")
 wta_out = scfbutils.wta_net(strengths, k, strengths.shape[0], strengths.shape[1],
-        1./44100, tau, 1., 2., 1.2)     # pickle this as well
+        1./44100, tau, M, M, sigma)     # pickle this as well
 print("Finished WTAN calculations!")
 
 pickle.dump((in_sig, f_s, freqs, chunks, templates, wta_out),

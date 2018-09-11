@@ -95,8 +95,8 @@ def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
     return out_np
 
 cpdef tuple template_adapt(TemplateData td, double f0, int num_h, double sigma,
-        double mu, double scale = 1.0, double beta = 1.0, double f_lo=0., double
-        f_hi=20000.):
+        double mu, double scale = 1.0, double beta = 1.0, double f_lo=0.0, double
+        f_hi=20000.0):
     cdef scd.fs_struct fs
     fs = scd.template_adapt_c(td.f_est_list, td.sig_len_n, f0, mu, num_h, sigma,
             scale, beta, f_lo, f_hi)
@@ -203,7 +203,7 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         np.ndarray[np.int32_t] off_record = np.zeros(sig_len-buf_size+1, dtype=np.int32) 
         int num_on = 0
         int is_locked = 0   # assume FDL is not tracking initially
-        double adaptation_bound = 0.75*bw 
+        double adaptation_bound = 2*bw 
 
     for k in range(buf_size-1, sig_len):
         # Update coefficients

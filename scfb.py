@@ -12,6 +12,7 @@ of FDLs as well as BM filters to preceded them).
 import math
 import numpy as np
 import scipy.signal as dsp
+import gammatone.filters as gtf
 import pdb
 import scfbutils    # this is the Cython module
 
@@ -28,34 +29,48 @@ class SCFB:
     implemented in a separated class), when the FDLs report a locked
     condition.
     '''
-    def __init__(self, f_lo, f_hi, num_chan, f_s):
+    def __init__(self, f_lo, f_hi, num_chan, f_s, filt_type='bessel'):
         # basic parameters and placeholders
         self.f_s = f_s
         self.dt = 1./f_s
         self.num_chan = num_chan
         self.chunks = []
         self.processed = False
+        self.filt_type = filt_type
 
-        # calculate frequencies and bandwidths of channels
-        self.f_c = np.logspace(np.log10(f_lo), np.log10(f_hi), num_chan)
-        c = 2.**(1./6.) - 1/(2.**(1./6.))   # bw multiplier
-        self.bw = [ max(100.0, f_c*c) for f_c in self.f_c ] 
-        print(self.f_c)
+        if filt_type == 'gammatone':
+            self.f_c = gtf.erb_space(f_lo, f_hi, num=num_chan)
+            self.f_c = np.flip(self.f_c)
+            self.erb_coefs = gtf.make_erb_filters(f_s, self.f_c)
+            self.bw = [self.erb_calc(f) for f in self.f_c]
+            # for k, f in enumerate(self.f_c):
+            #     print("Freq:\t", f, "BW: \t", self.bw[k])
 
-        # Set up filter coefficients for each channel
-        self.a = []
-        self.b = []
-        for k in range(self.num_chan):
-            b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
-                15.0), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
-                btype='bandpass')
-            self.a.append(a)
-            self.b.append(b)
+        else:
+            # calculate frequencies and bandwidths of channels
+            self.f_c = np.logspace(np.log10(f_lo), np.log10(f_hi), num_chan)
+            c = 2.**(1./6.) - 1/(2.**(1./6.))   # bw multiplier
+            self.bw = [ max(100.0, f_c*c) for f_c in self.f_c ] 
+            print(self.f_c)
 
+            # Set up filter coefficients for each channel
+            self.a = []
+            self.b = []
+            for k in range(self.num_chan):
+                b, a = dsp.bessel(2, np.array([max(self.f_c[k] - 0.5*self.bw[k],
+                    15.0), self.f_c[k] + 0.5*self.bw[k]])*(2/f_s),
+                    btype='bandpass')
+                self.a.append(a)
+                self.b.append(b)
+    
         # Set up FDLs for each channel
         self.fdl = [FDL(self.f_c[k], self.bw[k], self.f_s) for k in
                         range(self.num_chan)]
 
+    @staticmethod
+    def erb_calc(f):
+        f /= 1000
+        return 6.23*(f**2) + 93.39*f + 28.52
 
     def process_signal(self, in_sig, verbose=False):
         '''
@@ -64,23 +79,50 @@ class SCFB:
         stored in "self.chunks," which is a collection of ti
         '''
         self.in_sig = in_sig
+        print("len: ", len(self.in_sig))
         # fdl_out_chunks = []
         # agc_out_chunks = []
-        for k in range(self.num_chan):
-            if verbose:
-                print("Processing channel %d/%d"%(k+1, self.num_chan))
-            filted = dsp.filtfilt(self.b[k], self.a[k], in_sig)
-            f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
-            for j in range(num_chunks):
-                if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
-                    continue
-                # fdl_out_chunks.append(out_chunks[j])
-                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
-                out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
-                # agc_out_chunks.append(out_chunks[j])
-                freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
-                assert len(freq_est)==len(idx_chunks[j])
-                self.chunks.append( (idx_chunks[j], freq_est) )
+        if self.filt_type == 'bessel':
+            filted_channels = np.zeros((self.num_chan, len(self.in_sig)))
+            print(filted_channels.shape)
+            for k in range(self.num_chan):
+                if verbose:
+                    print("Processing channel %d/%d"%(k+1, self.num_chan))
+                filted_channels[k] = dsp.filtfilt(self.b[k], self.a[k], in_sig)
+                filted = filted_channels[k]
+                f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
+                for j in range(num_chunks):
+                    if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
+                        continue
+                    # fdl_out_chunks.append(out_chunks[j])
+                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
+                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
+                    # agc_out_chunks.append(out_chunks[j])
+                    freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
+                    assert len(freq_est)==len(idx_chunks[j])
+                    self.chunks.append( (idx_chunks[j], freq_est) )
+
+        elif self.filt_type == 'gammatone':
+            filted_channels = gtf.erb_filterbank(self.in_sig, self.erb_coefs)
+            # filted_channels = np.flipud(filted_channels)
+            for k, filted in enumerate(filted_channels):
+                if verbose:
+                    print("Processing channel %d/%d"%(k+1, self.num_chan))
+                f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
+                for j in range(num_chunks):
+                    if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
+                        continue
+                    # fdl_out_chunks.append(out_chunks[j])
+                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
+                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
+                    # agc_out_chunks.append(out_chunks[j])
+                    freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
+                    assert len(freq_est)==len(idx_chunks[j])
+                    self.chunks.append( (idx_chunks[j], freq_est) )
+        else:
+            print("Failure: given filter type unavailable.")
+            return 0
+        self.filtered_channels = filted_channels
         self.processed = True
         return self.chunks    # final goal, next one is for debugging
         # return fdl_out_chunks, agc_out_chunks, idx_chunks
@@ -136,7 +178,7 @@ class FDL:
         self.b_len = len(self.b_c)
         self.a_len = len(self.a_c)
         self.buf_size = max(self.a_len, self.b_len)    # for circular buffer allocation
-        lp_cutoff = f_c/10.0     # 8.0-12.0 is a good range
+        lp_cutoff = f_c/14.0     # 8.0-12.0 is a good range
         # lp_cutoff = 50.0
         # self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
         self.b_lpf, self.a_lpf = dsp.bessel(2, (lp_cutoff*2)/f_s)
@@ -173,7 +215,7 @@ class FDL:
         gamma = tau_g/2
         beta = 8.11*(gamma/tau_s) + 21.9*((gamma/tau_s)**2)
 
-        self.k_s = (S[idx] - S[idx-1])/f_step # primiate gradient calc
+        self.k_s = (S[idx] - S[idx-1])/f_step # primitive gradient calc
                                               # other version commented out
                                               # above
         self.k_p = (1/self.k_s)*(beta-1)/(beta+1)
@@ -189,7 +231,7 @@ class FDL:
 
         self.eps = 1e-305 # locking threshold for determining locked condition
         # self.min_e = 0.01    # minimum energy for locking condition
-        self.min_e = 25./self.f_c   # allow less energy in upper reginos (1/f)
+        self.min_e = 10./self.f_c   # allow less energy in upper reginos (1/f)
 
     def process_data(self, in_sig):
         '''
@@ -258,69 +300,14 @@ class Template:
     def adapt(self, td):
         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
                 self.mu, self.scale, self.beta, self.limits[0], self.limits[1])
-         
-        # template_adapt_num(TemplateData td, double f0, double[::1] f_vals,
-        #     double[::1] template, double[::1] template_grad, double mu=1.0):
         self.f_vals = phi
         self.strengths = s
-
-# ################################################################################
-# class TemplateNum:
-#     '''
-#     f_vals must be equally shaped (step size must be consistent)
-#     '''
-#     def __init__(self, f0, f_vals, temp_shape, mu=1.0):
-#         self.mu = mu
-#         self.f0 = f0
-#         self.step_size = f_vals[1] - f_vals[0]
-#         self.f_vals = f_vals
-#         self.temp_shape = temp_shape
-#         self.temp_grad = -np.gradient(self.temp_shape, self.step_size)
-#         self.phi_vals = []
-#         self.strengths = []
-# 
-#     def adapt(self, td):
-#         phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
-#                 self.mu, self.scale, self.beta)
-#          
-#         self.phi_vals, self.strengths = template_adapt_num(td, self.f0,
-#                 self.f_vals, self.temp_shape, self.temp_grad, self.mu):
-#         self.phi_vals = phi
-#         self.strengths = s
-# 
-# ################################################################################
-# class TemplateArrayNum:
-#     def __init__(self, chunks, sig_len, f0_vals, num_h=5, sigma=0.03, mu=1.0, scale=1.0,
-#             beta=1.0):
-#         print("Constructing linked list...")
-#         self.f0_vals = f0_vals
-#         self.sig_len = sig_len
-#         self.data = scfbutils.TemplateData(chunks, sig_len)
-#         self.templates = []
-#         print("Generating Templates...")
-#         for f0 in f0_vals:
-#             self.templates.append(Template(f0, num_h, sigma, mu, scale, beta))
-# 
-#     def new_data(self, chunks, sig_len, reset=True):
-#         self.sig_len = sig_len
-#         self.data = scfbutils.TemplateData(chunks, self.sig_len)
-#         if reset == True:
-#             for k, t in enumerate(self.templates):
-#                 t.f0 = self.f0_vals[k]
-# 
-#     def adapt(self, verbose=False):
-#         print("Adapting templates...")
-#         for k, t in enumerate(self.templates):
-#             if verbose:
-#                 print("Adapting template {}".format(k+1))
-#             t.adapt(self.data)
-#         print("Done adapting!")
 
 
 ################################################################################
 class TemplateArray:
-    def __init__(self, chunks, sig_len, f0_vals, num_h=5, sigma=0.03, mu=1.0, scale=1.0,
-            beta=1.0, limits=None):
+    def __init__(self, chunks, sig_len, f0_vals, num_h=6, sigma=0.03, mu=1.0, scale=1.0,
+            beta=0.9, limits=None):
         # if no limits given, let templates range over entire audible range
         if limits == None:
             limits = [(0., 20000.) for k in range(len(f0_vals))]
@@ -331,6 +318,7 @@ class TemplateArray:
         self.templates = []
         print("Generating Templates...")
         for k, f0 in enumerate(f0_vals):
+            print(limits[k])
             self.templates.append(Template(f0, num_h, sigma, mu, scale, beta,
                 limits[k]))
 
