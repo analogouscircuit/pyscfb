@@ -13,6 +13,7 @@ beta = 0.9
 f0 = 205.0
 fs = 44100
 num_h = 6
+heights = np.array([(1.5/p)**.9 for p in range(1, 7)])
 mt_h = 0.5
 len_t = 0.150
 len_n = int(fs*len_t)
@@ -41,11 +42,9 @@ for p in range(1, num_h+1):
     lines.append(ln)
 
 f_range = np.arange(20.0, 4000.0, 0.5)
-ln, = plt.plot(f_range, scu.template_vals(f_range, phi[0], sigma, num_h, scale,
-    beta))
+ln, = plt.plot(f_range, scu.template_vals(f_range, phi[0], sigma, heights))
 lines.append(ln)
-ln, = plt.plot(f_range, scu.template_dvals(f_range, phi[0], sigma, num_h, 3.,
-    beta), linestyle='-.')
+ln, = plt.plot(f_range, scu.template_dvals(f_range, phi[0], sigma, heights), linestyle='-.')
 lines.append(ln)
 
 def init():
@@ -54,10 +53,10 @@ def init():
     return lines,
 
 def update(k):
-    lines[-2].set_data(f_range, scu.template_vals(f_range, phi[k], sigma, num_h,
-        scale, beta))
-    lines[-1].set_data(f_range, scu.template_dvals(f_range, phi[k], sigma, num_h,
-        3, beta))
+    lines[-2].set_data(f_range, scu.template_vals(f_range, phi[k], sigma,
+        heights)) 
+    lines[-1].set_data(f_range, scu.template_dvals(f_range, phi[k], sigma,
+        heights))
     return lines,
 
 ani = FuncAnimation(fig, update, frames=np.arange(0, len_n, 1, dtype=int),

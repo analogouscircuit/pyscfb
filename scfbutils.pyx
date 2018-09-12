@@ -73,17 +73,17 @@ cdef class _finalizer:
 # Wrapped C Functions
 ################################################################################
 
-def template_vals(double[:] freqs, double f0, double sigma, int num_h, double
-        scale=1.0, double beta=1.0):
+def template_vals(double[:] freqs, double f0, double sigma, double[:] heights):
     cdef unsigned int length = len(freqs)
+    cdef unsigned int num_h = len(heights)
     return <double[:length]> scd.template_vals_c(&freqs[0], length, f0, sigma,
-            num_h, scale, beta)
+            num_h, &heights[0])
 
-def template_dvals(double[:] freqs, double f0, double sigma, int num_h, double
-        scale=1.0, double beta=1.0):
+def template_dvals(double[:] freqs, double f0, double sigma, double[:] heights): 
     cdef unsigned int length = len(freqs)
+    cdef unsigned int num_h = len(heights)
     return <double[:length]> scd.template_dvals_c(&freqs[0], length, f0, sigma,
-            num_h, scale, beta)
+            num_h, &heights[0]) 
 
 def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
         double[:] tau, double M, double N, double sigma):

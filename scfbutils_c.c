@@ -25,7 +25,7 @@
  */
 
 double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h,
-						double scale, double beta)
+						double *h_size)
 {
 
 	double *t_vals = malloc(num_vals * sizeof(double));
@@ -35,11 +35,7 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, i
 	for(int k = 0; k < num_vals; k++) {
 		t_vals[k] = 0.0;
 		for(int p = 1; p < lim; p++) {
-			//factor = p == 1 ? 1.0 : 0.8;
-			factor = scale*pow( (1./p), beta);
-			//t_vals[k] += exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma, 2)) );
-			//t_vals[k] += factor * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(0.03*p*f0, 2)) );
-			t_vals[k] += factor * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
+			t_vals[k] += h_size[p-1] * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
 		}
 	}	
 	return t_vals;
@@ -56,7 +52,7 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, i
  */
 
 double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, int num_h,
-						 double scale, double beta)
+						 double *h_size) 
 {
 
 	double *t_vals = malloc(num_vals * sizeof(double));
@@ -66,12 +62,11 @@ double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, 
 	for(int k = 0; k < num_vals; k++) {
 		t_vals[k] = 0.0;
 		for(int p = 1; p < lim; p++) {
-			//factor = p == 1 ? 1.0 : 0.8;
-			factor = scale*pow( (1./p), beta);
+			//factor = scale*pow( (1./p), beta);
 			app = sigma*p*f0;
 			app = app*app; 		// want squared
 			coef = (f_vals[k]*(f_vals[k] - p*f0))/(f0*app);
-			t_vals[k] += factor * coef * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
+			t_vals[k] += h_size[p-1] * coef * exp( - pow(f_vals[k] - p*f0, 2)/( 2 * pow(sigma*p*f0, 2)) );
 		}
 	}	
 	return t_vals;
