@@ -285,29 +285,28 @@ class FDL:
 class Template:
     '''
     '''
-    def __init__(self, f0, num_h, sigma=0.03, mu=1.0, scale=1.0, beta=1.0,
+    def __init__(self, f0, sigma, bump_heights, mu=1.0,
             limits=(0., 20000.)):
         self.f0 = f0
-        self.num_h = num_h
+        self.num_h =len(bump_heights)
+        self.heights = bump_heights
         self.mu = mu
-        self.sig = sigma
-        self.scale = scale
-        self.beta = beta
+        self.sigma = sigma
         self.limits = limits
         self.f_vals = []
         self.strengths = []
 
     def adapt(self, td):
-        phi, s = scfbutils.template_adapt(td, self.f0, self.num_h, self.sig,
-                self.mu, self.scale, self.beta, self.limits[0], self.limits[1])
+        phi, s = scfbutils.template_adapt(td, self.f0, self.sigma, self.heights,
+                self.mu, self.limits[0], self.limits[1])
         self.f_vals = phi
         self.strengths = s
 
 
 ################################################################################
 class TemplateArray:
-    def __init__(self, chunks, sig_len, f0_vals, num_h=6, sigma=0.03, mu=1.0, scale=1.0,
-            beta=0.9, limits=None):
+    def __init__(self, chunks, sig_len, f0_vals, sigma, bump_heights, mu=1.0, 
+            limits=None):
         # if no limits given, let templates range over entire audible range
         if limits == None:
             limits = [(0., 20000.) for k in range(len(f0_vals))]
@@ -319,8 +318,7 @@ class TemplateArray:
         print("Generating Templates...")
         for k, f0 in enumerate(f0_vals):
             print(limits[k])
-            self.templates.append(Template(f0, num_h, sigma, mu, scale, beta,
-                limits[k]))
+            self.templates.append(Template(f0, sigma, bump_heights, mu, limits[k]))
 
     def new_data(self, chunks, sig_len, reset=True):
         self.sig_len = sig_len

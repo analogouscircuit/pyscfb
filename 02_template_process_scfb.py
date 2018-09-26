@@ -14,11 +14,12 @@ if __name__=="__main__":
     for k in range(len(freqs)):
         limits.append((lims[k], lims[k+1]))
     # freqs = np.linspace(50.0, 4000.0, 100)
-    num_h = 6
+    bump_heights = [(1/k)**0.9 for k in range(1,7)]
+    bump_heights = np.array(bump_heights)
     sigma = 0.03 
     mu = 1
-    temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, num_h, sigma, mu,
-            limits=limits)
+    temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, sigma,
+            bump_heights, mu, limits=limits)
     temp_array.adapt(verbose=True)
 
     pickle.dump((temp_array.templates, freqs), open('template_data.pkl', 'wb'))

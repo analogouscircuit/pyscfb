@@ -29,7 +29,6 @@ double *template_vals_c(double *f_vals, int num_vals, double f0, double sigma, i
 {
 
 	double *t_vals = malloc(num_vals * sizeof(double));
-	double factor;
 	int lim = num_h+1;
 	
 	for(int k = 0; k < num_vals; k++) {
@@ -56,7 +55,7 @@ double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, 
 {
 
 	double *t_vals = malloc(num_vals * sizeof(double));
-	double factor, app, coef;
+	double app, coef;
 	int lim = num_h+1;
 	
 	for(int k = 0; k < num_vals; k++) {
@@ -84,13 +83,13 @@ double *template_dvals_c(double *f_vals, int num_vals, double f0, double sigma, 
  */
 
 fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0, 
-						   double mu, int num_h, double sigma, double scale,
-						   double beta, double f_lo, double f_hi)
+						   double mu, double sigma, int num_h, double *h_size,
+						   double f_lo, double f_hi)
 {
 	int k, n, p;
 	double *f= malloc(list_len*sizeof(double)); 	// freqs
 	double *s= malloc(list_len*sizeof(double)); 	// strengths
-	double dJ, temp, factor, freq;
+	double dJ, temp, freq;
 	double fmpp, app;
 	fs_struct fs;
 	f[0] = f0;
@@ -101,9 +100,9 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 			freq = fl_by_idx(n, f_estimates[k]);
 			for(p = 1; p < num_h+1; p++) {
 				//factor = p == 1 ? 1.0 : 0.8;
-				factor = scale*pow( (1./p), beta);
+				//factor = scale*pow( (1./p), beta);
 				//temp = factor * exp( - pow(freq - p*f[k],2)/(2*pow(sigma, 2)));
-				temp = factor * exp( - pow(freq - p*f[k],2)/(2*pow(sigma*p*f[k], 2)));
+				temp = h_size[p-1] * exp( - pow(freq - p*f[k],2)/(2*pow(sigma*p*f[k], 2)));
 				s[k] += temp;
 				//dJ += temp*(freq - p*f[k])/(p * pow(sigma, 2));
 				fmpp = freq-p*f[k];
@@ -115,43 +114,12 @@ fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
 		// clip adaptation range of template
 		if(f[k+1] > f_hi) f[k+1] = f_hi;
 		if(f[k+1] < f_lo) f[k+1] = f_lo;
-		fs.freqs = f;
-		fs.strengths = s;
 	}
+	fs.freqs = f;
+	fs.strengths = s;
 	return fs;
 }
 
-
-/*
- * Function: 	template_adapt_num_c
- * -----------------------------
- * Template adaptation with numerical template (not analytical calculation) 
- */
-
-
-fs_struct template_adapt_num_c(f_list **f_estimates, int list_len, double *f_range, int f_len, 
-							double *temp, double *temp_grad, double f0, double mu)
-{
-	int k, n;
-	double *f= malloc(list_len*sizeof(double)); 	// freqs
-	double *s= malloc(list_len*sizeof(double)); 	// strengths
-	double dJ, freq;
-	fs_struct fs;
-	f[0] = f0;
-	for(k = 0; k < list_len-1; k++) {
-		s[k] = 0.0;
-		dJ = 0.0;
-		for(n = 0; n < f_estimates[k]->count; n++) {
-			freq = fl_by_idx(n, f_estimates[k]);
-			s[k] = lin_interp(freq, f_range, temp, f_len);
-			dJ = lin_interp(freq, f_range, temp_grad, f_len); 
-		}
-		f[k+1] = f[k] + mu*dJ;
-		fs.freqs = f;
-		fs.strengths = s;
-	}
-	return fs;
-}
 
 /*
  * Function: 	lin_interp

@@ -36,28 +36,24 @@ print("Finished WTAN calculations!")
 
 ## Animation
 fig = plt.figure()
-ax1 = fig.add_subplot(1,2,1)
-ax2 = fig.add_subplot(1,2,2)
-ax1.set_xscale('log')
-
+ax1 = fig.add_subplot(1,1,1)
 lines = []
-patches = []
-for k, t in enumerate(templates):
-    ln, = ax1.plot([t.f_vals[0], t.f_vals[0]], [0, t.strengths[0]], color='k')
-    lines.append(ln)
-    # circle = Circle((t.f_vals[0], t.strengths[0]), wta_out[k][0])
-    # patches.append(circle)
-    ln, = ax1.plot([t.f_vals[0], t.f_vals[0]], [30., 30.-wta_out[k][0]],
-            color='r')
-    lines.append(ln)
-    # ax2.plot(times, wta_out[k])
-# p = PatchCollection(patches)
-# ax1.add_collection(p)
+
 
 def init():
+    ax1.set_xscale('log')
     ax1.set_xlim(20.0, 4000.0)
-    ax1.set_ylim(0.0, 30.0)
-    return lines,
+    ax1.set_ylim(0.0, 40.0)
+    ax1.set_xlabel("Frequency (Hz)", size=16)
+    ax1.set_ylabel("Strength", size=16)
+    for k, t in enumerate(templates):
+        ln, = ax1.plot([t.f_vals[0], t.f_vals[0]], [0, t.strengths[0]], color='k')
+        lines.append(ln)
+        ln, = ax1.plot([t.f_vals[0], t.f_vals[0]], [30., 30.-wta_out[k][0]],
+                color='r')
+        lines.append(ln)
+    text = ax1.text(25, 36, "$time$ = {:.2f}".format(0), fontsize=16)
+    return lines, text
 
 def update(k):
     for n in range(len(templates)):
@@ -65,10 +61,23 @@ def update(k):
                 [0, templates[n].strengths[k]])
         # patches[n].set_radius(10*wta_out[n][k])
         lines[2*n+1].set_data([templates[n].f_vals[k], templates[n].f_vals[k]],
-                [30.0, 30.-wta_out[n][k]])
-    return lines,
+                [40.0, 40.-0.25*wta_out[n][k]])
+        text.set_text("$time$ = {:.2f}".format(k/44100))
+    return lines, text
     
 ani = FuncAnimation(fig, update, frames=np.arange(0, sig_len, 100, dtype=int),
-        init_func=init, interval=.0001, repeat=False)
+        init_func=init, interval=20, repeat=False)
+
+# ani = FuncAnimation(fig, update, frames=np.arange(int(1.65*44100),
+#     int(1.8*44100), 50, dtype=int),
+#         init_func=init, interval=20, repeat=False)
+
+# ani = FuncAnimation(fig, update, frames=np.array(
+#     [1.68*44100, 1.70*44100, 1.72*44100, 1.74*44100
+#         ], dtype=int),
+#         init_func=init, interval=900, repeat=False)
+
+# ani = FuncAnimation(fig, update, [79380],
+#         init_func=init, interval=.0001, repeat=False)
 
 plt.show()

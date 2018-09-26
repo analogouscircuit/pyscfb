@@ -15,13 +15,13 @@ cdef extern from "scfbutils_c.h":
         double *strengths
 
     double *template_vals_c(double *f_vals, int num_vals, double f0, 
-            double sigma, int num_h, double *h_vals)
+            double sigma, int num_h, double *h_size)
 
     double *template_dvals_c(double *f_vals, int num_vals, double f0, 
-            double sigma, int num_h, double *h_vals) 
+            double sigma, int num_h, double *h_size) 
 
     fs_struct template_adapt_c(f_list **f_estimates, int list_len, double f0,
-            double mu, int num_h, double sigma, double scale, double beta,
+            double mu, double sigma, int num_h, double *h_size, 
             double f_lo, double f_hi)
 
     fs_struct template_adapt_num_c(f_list **f_estimates, int list_len, 

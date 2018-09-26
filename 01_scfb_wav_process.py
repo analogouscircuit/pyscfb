@@ -75,7 +75,7 @@ else:   # first 8 notes of Die Kunst der Fuge
 #     in_sig /= np.max(in_sig) 
 
 # process through SCFB
-peri = scfb.SCFB(100., 4000., 150, f_s, filt_type='gammatone')
+peri = scfb.SCFB(100., 4000., 100, f_s, filt_type='gammatone')
 peri.process_signal(in_sig, verbose=True)
 sig_len_n = len(in_sig)
 
@@ -85,11 +85,12 @@ ax1 = fig.add_subplot(1,3,1)
 ax2 = fig.add_subplot(1,3,2)
 ax3 = fig.add_subplot(1,3,3)
 
-ax1.plot(np.arange(len(in_sig))/f_s, in_sig)
+ax1.plot(np.arange(len(in_sig))/f_s, in_sig, color='808080', linewidth=0.5)
 
 times = np.arange(len(in_sig))/f_s
 for n in range(peri.num_chan):
-    ax2.plot(times, peri.filtered_channels[n,:] + n, color='808080')
+    ax2.plot(times, peri.filtered_channels[n,:] + n, color='808080',
+            linewidth=0.7)
     
 idcs = np.arange(0, peri.num_chan, 5)
 ax2.set_yticks(idcs)
@@ -98,7 +99,7 @@ ax2.set_yticklabels(labels)
 
 for fdl in peri.fdl:
     ax3.plot(np.arange(0,len(in_sig))/f_s, fdl.f_record, linewidth=0.7,
-            color='k', linestyle='--')
+            color='808080', linestyle='--')
 peri.plot_output(ax3)
 plt.show()
 
