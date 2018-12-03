@@ -11,6 +11,11 @@
  * ---------------------------
  */
 
+typedef struct f_node_vals_s{
+	double f_val;
+	double s_val;
+} f_node_vals;
+
 typedef struct f_node_s{
 	double val;
 	struct f_node_s *next;	

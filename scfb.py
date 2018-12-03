@@ -109,12 +109,13 @@ class SCFB:
                 if verbose:
                     print("Processing channel %d/%d"%(k+1, self.num_chan))
                 f0s, idx_chunks, out_chunks, num_chunks = self.fdl[k].process_data(filted)
+                self.out_chunks = out_chunks
                 for j in range(num_chunks):
                     if len(out_chunks[j]) < np.floor(0.03/self.dt):   # dur > 30 ms
                         continue
                     # fdl_out_chunks.append(out_chunks[j])
-                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.1, 0.25)
-                    out_chunks[j] = scfbutils.agc(out_chunks[j], 0.001, 0.25)
+                    out_chunks[j], amps1 = scfbutils.agc(out_chunks[j], 0.1, 0.25)
+                    out_chunks[j], amps2 = scfbutils.agc(out_chunks[j], 0.001, 0.25)
                     # agc_out_chunks.append(out_chunks[j])
                     freq_est = scfbutils.pll(out_chunks[j], f0s[j], self.f_s)
                     assert len(freq_est)==len(idx_chunks[j])

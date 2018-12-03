@@ -18,8 +18,9 @@ if __name__=="__main__":
     bump_heights = np.array(bump_heights)
     sigma = 0.03 
     mu = 1
+    # turn on limits if want to eliminate "butte" behavior
     temp_array = scfb.TemplateArray(chunks, sig_len_n, freqs, sigma,
-            bump_heights, mu, limits=limits)
+            bump_heights, mu)#, limits=limits)
     temp_array.adapt(verbose=True)
 
     pickle.dump((temp_array.templates, freqs), open('template_data.pkl', 'wb'))

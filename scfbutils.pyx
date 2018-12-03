@@ -394,7 +394,8 @@ cpdef np.ndarray pll(np.ndarray[np.float64_t, ndim=1] in_sig, double f_c, double
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
+# cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
+cpdef tuple agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double ds):
     '''
     Called SCFB class.
     Implementation of a simple automatic gain control (AGC) unit. The approach
@@ -413,7 +414,7 @@ cpdef np.ndarray agc(np.ndarray[np.float64_t, ndim=1] in_sig, double mu, double 
         s[k-1] = a[k-1]*in_sig[k-1]
         sign = 1.0 if a[k-1] > 0 else 0.0
         a[k] = a[k-1] - mu * sign * (s[k-1]*s[k-1]-ds)
-    return s
+    return s, a
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
