@@ -109,20 +109,42 @@ if len(sys.argv)==2:
 #             in_sig += ((1/p)**0.0)*np.cos(2*np.pi*freq*p*t +
 #                     np.random.random(1)*2*np.pi)
 #     in_sig /= np.max(in_sig) 
-else:   # single tones for butte diagram
+else:     # two notes with pause
     f_s = 44100
-    dt = 1/f_s
-    num_h = 1
-    # freqs = [300, 300.*(5/4), 300.*(3/2)]
-    freqs = [300, 500]
-    dur = 0.2
-    t = np.arange(dur*f_s)/f_s
-    in_sig = np.zeros_like(t)
-    for freq in freqs:
-        for p in range(1, num_h+1):
-            in_sig += ((1/p)**0.0)*np.cos(2*np.pi*freq*p*t +
-                    np.random.random(1)*2*np.pi)
-    in_sig /= np.max(in_sig) 
+    dt = 1./f_s
+    note_dur = 0.200
+    pause_dur = 0.020
+    freqs = [293.6649, 440.0] # D3, A4
+    num_h = 6
+    periods = int(note_dur//(1/freqs[0]))
+    dur_1 = periods/freqs[0]
+    periods = int(note_dur//(1/freqs[1]))
+    dur_2 = periods/freqs[1]
+    sig1 = np.concatenate([np.sin(2*np.pi*freqs[0]*np.arange(0, dur_1, dt)),
+                           np.zeros(int(pause_dur/dt)),
+                           np.sin(2*np.pi*freqs[1]*np.arange(0, dur_2, dt))])
+    for p in range(2, num_h+1):
+        sig1 += np.concatenate([np.sin(2*np.pi*p*freqs[0]*np.arange(0, dur_1, dt)),
+                               np.zeros(int(pause_dur/dt)),
+                               np.sin(2*np.pi*p*freqs[1]*np.arange(0, dur_2, dt))])
+    in_sig = sig1
+    print("in_sig shape", type(in_sig), in_sig.dtype)
+    in_sig /= np.max(in_sig)
+# else:   # single tones for butte diagram
+#     f_s = 44100
+#     dt = 1/f_s
+#     num_h = 1
+#     # freqs = [300, 300.*(5/4), 300.*(3/2)]
+#     freqs = [300, 500]
+#     dur = 0.2
+#     t = np.arange(dur*f_s)/f_s
+#     in_sig = np.zeros_like(t)
+#     for freq in freqs:
+#         for p in range(1, num_h+1):
+#             in_sig += ((1/p)**0.0)*np.cos(2*np.pi*freq*p*t +
+#                     np.random.random(1)*2*np.pi)
+#     in_sig /= np.max(in_sig) 
+#     print("in_sig shape", in_sig.shape, type(in_sig), in_sig.dtype)
 # else:
 #     f_s = 44100
 #     dt = 1/f_s
@@ -149,7 +171,8 @@ else:   # single tones for butte diagram
 #     in_sig /= np.max(in_sig)
 
 # process through SCFB
-peri = scfb.SCFB(100., 4000., 100, f_s, filt_type='gammatone')
+peri = scfb.SCFB(100., 4000., 100, f_s, filt_type='gammatone', bounding=True)
+# peri = scfb.SCFB(250., 350., 10, f_s, filt_type='gammatone')
 peri.process_signal(in_sig, verbose=True)
 sig_len_n = len(in_sig)
 

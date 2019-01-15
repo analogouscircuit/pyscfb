@@ -13,6 +13,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 
 /*
@@ -174,13 +175,13 @@ double *wta_net_c(double *E, double *k, int num_n, int sig_len, double dt,
 			E_col[i] = plus(E[i*sig_len + t] - sum);
 		}
 		rhs(x_col, E_col, K1, num_n, k, tau, M, N, sigma);
-		
+
 		// Find K2 vals
 		for(i = 0; i < num_n; i++) {
 			x_col[i] = x[i*sig_len + t] + hdt*K1[i];
 		}
 		rhs(x_col, E_col, K2, num_n, k, tau, M, N, sigma);
-
+		
 		// Find K3 vals
 		for(i = 0; i < num_n; i++) {
 			x_col[i] = x[i+sig_len + t] + hdt*K2[i];

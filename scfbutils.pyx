@@ -12,10 +12,13 @@ coefficient calculations).
 import numpy as np
 import scipy.signal as dsp
 cimport numpy as np
+np.import_array()
 cimport cython
 cimport scfbutils_d as scd
 from libc.math cimport cos, sin, fabs, log, exp
 from libc.stdlib cimport malloc, free
+import pdb  # remove after debugging
+import time
 
 
 ################################################################################
@@ -67,8 +70,6 @@ cdef class _finalizer:
         if self._data is not NULL:
             free(self._data)
 
-
-
 ################################################################################
 # Wrapped C Functions
 ################################################################################
@@ -91,7 +92,7 @@ def wta_net(double[:,::1] E, double[:,::1] k, int num_n, int sig_len, double dt,
                                         &tau[0], M, N, sigma)
     cdef double [:,::1] out_mv = <double[:num_n,:sig_len]>out
     cdef np.ndarray out_np = np.asarray(out_mv)
-    set_base(out_np, out)
+    # set_base(out_np, out)     # this broke for some reason -- investigate
     return out_np
 
 cpdef tuple template_adapt(TemplateData td, double f0, double sigma, double[:]
@@ -156,13 +157,17 @@ cpdef tuple process_chunks(list chunks, int sig_len_n, double f0, double
 @cython.wraparound(False)
 cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw, double f_s,
         np.ndarray[np.float64_t] b_lpf, np.ndarray[np.float64_t] a_lpf, double scale_fac,
-        double min_e, double eps, double k_i, double k_p):
+        double min_e, double eps, double k_i, double k_p, bounding=True):
     '''
     Called in FDL class.
     Function that actually performs the adaptive filtering. Generates a
     list of 3-element tuples (f0, times, output). All of these are needed
     to initiate the PLL stage.
+
+    Fails if initial signal value is 0 -- DEBUG THIS!!!
     '''
+    if in_sig[0] == 0:
+        in_sig[0] = 0.000001    # crappy fix
     cdef int filt_ord = 2
     cdef int buf_size = filt_ord + 1
     # Allocate memory and circular buffer indices
@@ -279,26 +284,27 @@ cpdef tuple process_data(np.ndarray[np.float64_t] in_sig, double f_c, double bw,
         f_c = f_c_base + u[idx0]
         
         ## reset if outside of range
-        # if f_c > f_c_base + adaptation_bound:
-        #     if is_locked == 1:
-        #         is_locked = 0
-        #         off_record[num_on-1] = k - offset
-        #     f_c = f_c_base + adaptation_bound
-        #     out_l *= 0
-        #     out_u *= 0
-        #     env_l *= 0
-        #     env_u *= 0
-        #     u *= 0
-        # if f_c < f_c_base - adaptation_bound:
-        #     if is_locked == 1:
-        #         is_locked = 0
-        #         off_record[num_on-1] = k - offset
-        #     f_c = f_c_base - adaptation_bound 
-        #     out_l *= 0
-        #     out_u *= 0
-        #     env_l *= 0
-        #     env_u *= 0
-        #     u *= 0
+        if bounding:
+            if f_c > f_c_base + adaptation_bound:
+                if is_locked == 1:
+                    is_locked = 0
+                    off_record[num_on-1] = k - offset
+                f_c = f_c_base + adaptation_bound
+                out_l *= 0
+                out_u *= 0
+                env_l *= 0
+                env_u *= 0
+                u *= 0
+            if f_c < f_c_base - adaptation_bound:
+                if is_locked == 1:
+                    is_locked = 0
+                    off_record[num_on-1] = k - offset
+                f_c = f_c_base - adaptation_bound 
+                out_l *= 0
+                out_u *= 0
+                env_l *= 0
+                env_u *= 0
+                u *= 0
 
         ## set lower limit of adaptation
         if f_c < 80.0:

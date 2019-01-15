@@ -15,6 +15,7 @@ import scipy.signal as dsp
 import gammatone.filters as gtf
 import pdb
 import scfbutils    # this is the Cython module
+import matplotlib.pyplot as plt     # only for debugging -- remove eventually
 
 
 ################################################################################
@@ -29,7 +30,8 @@ class SCFB:
     implemented in a separated class), when the FDLs report a locked
     condition.
     '''
-    def __init__(self, f_lo, f_hi, num_chan, f_s, filt_type='bessel'):
+    def __init__(self, f_lo, f_hi, num_chan, f_s, filt_type='gammatone',
+         bounding=True):
         # basic parameters and placeholders
         self.f_s = f_s
         self.dt = 1./f_s
@@ -37,6 +39,7 @@ class SCFB:
         self.chunks = []
         self.processed = False
         self.filt_type = filt_type
+        self.bounding = bounding
 
         if filt_type == 'gammatone':
             self.f_c = gtf.erb_space(f_lo, f_hi, num=num_chan)
@@ -64,7 +67,8 @@ class SCFB:
                 self.b.append(b)
     
         # Set up FDLs for each channel
-        self.fdl = [FDL(self.f_c[k], self.bw[k], self.f_s) for k in
+        self.fdl = [FDL(self.f_c[k], self.bw[k], self.f_s,
+            bounding=self.bounding) for k in
                         range(self.num_chan)]
 
     @staticmethod
@@ -157,7 +161,7 @@ class FDL:
     somewhat ad-hoc adjustment term is added so that the triplet filter bank
     converges more nearly to the desired frequency. 
     '''
-    def __init__(self, f_c, bw_gt, f_s, debug=False):
+    def __init__(self, f_c, bw_gt, f_s, bounding=True, debug=False):
         '''
         Calculate all the FDL parameters. (Actually signal processing done in
         Cython later.)
@@ -166,6 +170,7 @@ class FDL:
         self.dt = 1.0/f_s
         self.f_c = f_c
         self.f_c_base = f_c
+        self.bounding=bounding
         self.debug=debug
 
         # set up filter parameters and coefficients
@@ -241,7 +246,7 @@ class FDL:
         out, self.f_record, on, off, num_on = scfbutils.process_data(
                           in_sig, self.f_c, self.bw, self.f_s, self.b_lpf,
                           self.a_lpf, self.scale_fac, self.min_e, self.eps,
-                          self.k_i, self.k_p)
+                          self.k_i, self.k_p, self.bounding)
         self.out = out
         self.idx_chunks = []
         self.out_chunks = []
