@@ -75,7 +75,7 @@ num_channels = 70
 
 ## Template parameters
 templates_per_octave_sparse = 10
-templates_per_octave_dense = 800
+templates_per_octave_dense = 100
 sigma = 0.030
 num_h = 5
 
