@@ -78,6 +78,29 @@ f_est = f_est[1:]
 s_vals = s_vals[1:]
 d_vals = d_vals[1:]
 
+
+# # all partials moving 
+# chunks = []
+# idcs = np.arange(len_n, dtype=np.int32)
+# for k, f in enumerate([400., 600., 800., 1000., 1200.]):
+#     input_freqs[k] = np.concatenate([input_freqs[k], np.linspace(f, 1.1*f, len_n)])
+#     chunks.append((idcs, np.linspace(f, 1.1*f, len_n)))
+# ta = scfb.TemplateArray(chunks, len_n, f_vals, sigma, heights, mu)
+# ta.adapt(verbose=True)
+# print(ta.templates[0].f_vals[-1])
+# phi = ta.templates[0].f_vals
+# s = ta.templates[0].strengths
+# d = np.array([np.sum(scu.template_dvals(stimulus, f, 0.03, heights)) for f in
+#     phi])
+# f_vals = np.ones(1)*phi[-1]
+# f_est = np.concatenate([f_est, phi])
+# s_vals = np.concatenate([s_vals, s])
+# d_vals = np.concatenate([d_vals, d])
+# 
+# f_est = f_est[1:]
+# s_vals = s_vals[1:]
+# d_vals = d_vals[1:]
+
 print(len(input_freqs), input_freqs[0].shape)
 ## Animation
 fig = plt.figure()

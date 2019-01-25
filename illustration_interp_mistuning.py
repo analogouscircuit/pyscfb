@@ -8,7 +8,6 @@ import gammatone.filters as gtf
 ################################################################################
 # Functions
 ################################################################################
-
 def template_strength(f_vals_in, f0, num_h, sigma):
     strength = 0
     for f in f_vals_in:
@@ -75,8 +74,9 @@ delays = np.arange(0,w_size//2)*dt
 num_channels = 70
 
 ## Template parameters
-templates_per_octave = 12
-sigma = 0.035
+templates_per_octave_sparse = 10
+templates_per_octave_dense = 800
+sigma = 0.030
 num_h = 5
 
 ## Plotting parameters
@@ -97,13 +97,13 @@ t_lim = [1.0/f for f in f_lim]
 ################################################################################
 
 ## Template input
-input_vals = [f0*p for p in range(1,num_h+1)]
+input_vals = [f0*p for p in range(2,num_h+1)]
 input_vals[mistuned_h-1] *= mistuning
 
 ## Signal for SAC approach
 in_sig = np.zeros_like(t)
 in_sig_mt = np.zeros_like(t)
-for p in range(1, num_h+1):
+for p in range(2, num_h+1):
     if p == mistuned_h:
         in_sig_mt += np.cos(2*np.pi*f0*p*t*mistuning)
     else:
@@ -112,57 +112,6 @@ for p in range(1, num_h+1):
 in_sig /= np.max(in_sig)
 in_sig_mt /=np.max(in_sig_mt)
 
-
-################################################################################
-# Template power diagram
-################################################################################
-
-## Dense templates
-plt.subplot(132)
-f_vals = np.logspace(np.log10(100), np.log10(200), 400)
-t_power = np.zeros_like(f_vals)
-for k, f0 in enumerate(f_vals):
-    t_power[k] = template_strength(input_vals, f0, num_h, sigma)
-t_power /= np.max(t_power)
-est_idx = np.argmax(t_power)
-plt.plot(f_vals, t_power)
-plt.plot([f0_perceived, f0_perceived], [-5, 5], color=color_true)
-plt.plot([f_vals[est_idx], f_vals[est_idx]], [-5, 5], 
-        color=color_estimated,
-        linestyle=style_estimated)
-plt.xlim(f_lim)
-plt.ylim([-0.1, 1.1])
-plt.xlabel("Template F0", size=fontsize_label)
-plt.ylabel("Template Power", size=fontsize_label)
-plt.tick_params(axis='both', which='both', labelsize=fontsize_ticks)
-
-## Sparse templates
-plt.subplot(133)
-f_vals = np.logspace(np.log10(100), np.log10(200), templates_per_octave)
-t_power = np.zeros_like(f_vals)
-for k, f0 in enumerate(f_vals):
-    t_power[k] = template_strength(input_vals, f0, num_h, sigma)
-t_power /= np.max(t_power)
-peak_idx = np.argmax(t_power)
-q = parabolic_interp(f_vals[peak_idx-1:peak_idx+2],
-        t_power[peak_idx-1:peak_idx+2])
-interp_points = np.arange(148., 164.5, 0.1)
-interp_vals = [q(x) for x in interp_points]
-est_idx = np.argmax(interp_vals)
-plt.plot(f_vals, t_power)
-plt.plot([f0_perceived, f0_perceived], [-5, 5], color=color_true)
-plt.plot([interp_points[est_idx], interp_points[est_idx]], [-5, 5],
-        color=color_estimated,
-        linestyle=style_estimated)
-plt.plot(interp_points, interp_vals, 
-        color=color_interp, 
-        linewidth=width_interp, 
-        linestyle=style_interp)
-plt.xlim(f_lim)
-plt.ylim([-0.1, 1.1])
-plt.xlabel("Template F0", size=fontsize_label)
-plt.ylabel("Template Power", size=fontsize_label)
-plt.tick_params(axis='both', which='both', labelsize=fontsize_ticks)
 
 ################################################################################
 # SAC Peak Picking 
@@ -181,8 +130,8 @@ for k in range(num_channels):
             filt_channels[k, -w_size:], mode='same')
     ac_channels_mt[k,:] = dsp.correlate(filt_channels_mt[k, -w_size:], 
             filt_channels_mt[k, -w_size:], mode='same')
-    summary_ac += ac_channels[k,:]
-    summary_ac_mt += ac_channels_mt[k,:]
+    summary_ac += np.clip(ac_channels[k,:],1,None)  # half-wave rectify
+    summary_ac_mt += np.clip(ac_channels_mt[k,:],0,None)  # half-wave rectify
 
 summary_ac /= np.max(summary_ac)
 summary_ac /= 0.685 # normalize wrt non-zero bump
@@ -204,11 +153,63 @@ plt.plot([1./f0_perceived, 1./f0_perceived], [-5,5],
 plt.plot([delays[est_idx], delays[est_idx]], [-5, 5],
         color=color_estimated,
         linestyle=style_estimated)
+print("SAC Peak Estimate: ", 1./delays[est_idx])
 plt.xlim(t_lim)
-plt.ylim([-0.4, 1.1])
+plt.ylim([-0.1, 1.1])
 plt.xlabel("Delay Time", size=fontsize_label)
 plt.ylabel("Power", size=fontsize_label)
 plt.tick_params(axis='both', which='both', labelsize=fontsize_ticks)
 
+
+################################################################################
+# Template power diagram
+################################################################################
+## Dense templates
+plt.subplot(132)
+f_vals = np.logspace(np.log10(100), np.log10(200), templates_per_octave_dense)
+t_power = np.zeros_like(f_vals)
+for k, f0 in enumerate(f_vals):
+    t_power[k] = template_strength(input_vals, f0, num_h, sigma)
+t_power /= np.max(t_power)
+est_idx = np.argmax(t_power)
+plt.plot(f_vals, t_power)
+plt.plot([f0_perceived, f0_perceived], [-5, 5], color=color_true)
+plt.plot([f_vals[est_idx], f_vals[est_idx]], [-5, 5], 
+        color=color_estimated,
+        linestyle=style_estimated)
+plt.xlim(f_lim)
+plt.ylim([-0.1, 1.1])
+plt.xlabel("Template F0", size=fontsize_label)
+plt.ylabel("Template Power", size=fontsize_label)
+plt.tick_params(axis='both', which='both', labelsize=fontsize_ticks)
+
+## Sparse templates
+plt.subplot(133)
+f_vals = np.logspace(np.log10(100), np.log10(200), templates_per_octave_sparse)
+t_power = np.zeros_like(f_vals)
+for k, f0 in enumerate(f_vals):
+    t_power[k] = template_strength(input_vals, f0, num_h, sigma)
+t_power /= np.max(t_power)
+peak_idx = np.argmax(t_power)
+q = parabolic_interp(f_vals[peak_idx-1:peak_idx+2],
+        t_power[peak_idx-1:peak_idx+2])
+# interp_points = np.arange(148., 164.5, 0.1)
+interp_points = np.arange(f_vals[peak_idx-1], f_vals[peak_idx+1], 0.1)
+interp_vals = [q(x) for x in interp_points]
+est_idx = np.argmax(interp_vals)
+plt.plot(f_vals, t_power)
+plt.plot([f0_perceived, f0_perceived], [-5, 5], color=color_true)
+plt.plot([interp_points[est_idx], interp_points[est_idx]], [-5, 5],
+        color=color_estimated,
+        linestyle=style_estimated)
+plt.plot(interp_points, interp_vals, 
+        color=color_interp, 
+        linewidth=width_interp, 
+        linestyle=style_interp)
+plt.xlim(f_lim)
+plt.ylim([-0.1, 1.1])
+plt.xlabel("Template F0", size=fontsize_label)
+plt.ylabel("Template Power", size=fontsize_label)
+plt.tick_params(axis='both', which='both', labelsize=fontsize_ticks)
 
 plt.show()
