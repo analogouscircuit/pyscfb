@@ -1,5 +1,5 @@
 # pyscfb
-Python/Cython/C implementation of Karmaresan, Peddinti and Cariani's Synchrony Capture Filter Bank cochlear model.
+Python/Cython/C implementation of Karmaresan, Peddinti and Cariani's (2013) Synchrony Capture Filter Bank cochlear model.
 
 Also included are tools for adaptively matching harmonic templates to a spectral representation of a signal, as illustrated below.
 
